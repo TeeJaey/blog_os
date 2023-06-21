@@ -16,6 +16,7 @@ pub mod memory;
 pub mod serial;
 pub mod task;
 pub mod vga_buffer;
+pub mod rtl8139;
 
 pub fn init() {
     gdt::init();

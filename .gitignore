@@ -2,3 +2,4 @@
 **/*.rs.bk
 
 .vscode
+eth0.dat
