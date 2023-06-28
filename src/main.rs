@@ -19,13 +19,19 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     use x86_64::VirtAddr;
 
     println!("Hello World{}", "!");
+    println!("init blog_os");
     blog_os::init();
 
+    println!("phys_mem_offset");
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+    println!("mapper");
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    println!("frame_allocator");
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+
+    blog_os::load_pci();
 
     #[cfg(test)]
     test_main();

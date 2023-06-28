@@ -17,6 +17,7 @@ pub mod serial;
 pub mod task;
 pub mod vga_buffer;
 pub mod rtl8139;
+pub mod pci;
 
 pub fn init() {
     gdt::init();
@@ -24,6 +25,11 @@ pub fn init() {
     unsafe { interrupts::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
 }
+
+pub fn load_pci() {
+    pci::init();
+}
+
 pub trait Testable {
     fn run(&self) -> ();
 }
