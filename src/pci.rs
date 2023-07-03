@@ -104,7 +104,7 @@ pub fn get_pci_device_bsf(bus: u8, slot: u8, func: u8) -> Option<&'static PciDev
     None
 }
 
-/// Returns a reference to the `PciDevice` with the given bus, slot, func identifier.
+/// Returns a reference to the `PciDevice` with the given Vendor ID and Device ID.
 /// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
 pub fn get_pci_device_id(vendor: u16, device: u16) -> Option<&'static PciDevice> {
     for b in get_pci_buses() {
@@ -229,29 +229,39 @@ impl PciLocation {
     }
 
     /// read 32-bit data at the specified `offset` from the PCI device specified by the given `bus`, `slot`, `func` set.
-    fn pci_read_32(&self, offset: u8) -> u32 {
+    pub fn pci_read_32(&self, offset: u8) -> u32 {
+        let addr = self.pci_address(offset);
+        println!("reading address: {}", addr);
         unsafe { 
-            PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(offset)); 
+            PCI_CONFIG_ADDRESS_PORT.lock().write(addr); 
         }
         Self::read_data_port() >> ((offset & (!PCI_CONFIG_ADDRESS_OFFSET_MASK)) * 8)
     }
 
     /// Read 16-bit data at the specified `offset` from this PCI device.
-    fn pci_read_16(&self, offset: u8) -> u16 {
+    pub fn pci_read_16(&self, offset: u8) -> u16 {
         self.pci_read_32(offset) as u16
     } 
 
     /// Read 8-bit data at the specified `offset` from the PCI device.
-    fn pci_read_8(&self, offset: u8) -> u8 {
+    pub fn pci_read_8(&self, offset: u8) -> u8 {
         self.pci_read_32(offset) as u8
     }
 
     /// Write 32-bit data to the specified `offset` for the PCI device.
-    fn pci_write(&self, offset: u8, value: u32) {
+    pub fn pci_write_32(&self, offset: u8, value: u32) {
         unsafe {
-            PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(offset)); 
+            PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(offset));
             Self::write_data_port((value) << ((offset & 2) * 8));
         }
+    }
+
+    pub fn pci_write_16(&self, offset: u8, value: u16) {
+        self.pci_write_32(offset, value as u32)
+    }
+
+    pub fn pci_write_8(&self, offset: u8, value: u8) {
+        self.pci_write_32(offset, value as u32)
     }
 
     fn write_data_port(value: u32) {
@@ -396,12 +406,12 @@ impl PciDevice {
         let bar_offset = PCI_BAR0 + (bar_index as u8 * 4);
         let original_value = self.bars[bar_index];
 
-        self.pci_write(bar_offset, 0xFFFF_FFFF);          // Step 1
+        self.pci_write_32(bar_offset, 0xFFFF_FFFF);          // Step 1
         let mut mem_size = self.pci_read_32(bar_offset);  // Step 2
         mem_size.set_bits(0..4, 0);                       // Step 3
         mem_size = !(mem_size);                           // Step 4
         mem_size += 1;                                    // Step 4
-        self.pci_write(bar_offset, original_value);       // Step 5
+        self.pci_write_32(bar_offset, original_value);       // Step 5
         mem_size
     }
 

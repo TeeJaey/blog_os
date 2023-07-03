@@ -27,7 +27,7 @@ pub fn init() {
 }
 
 pub fn load_pci() {
-    pci::init();
+    rtl8139::init();
 }
 
 pub trait Testable {
