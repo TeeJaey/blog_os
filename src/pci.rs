@@ -45,6 +45,18 @@ pub const PCI_INTERRUPT_PIN:         u8 = 0x3D;
 pub const PCI_MIN_GRANT:             u8 = 0x3E;
 pub const PCI_MAX_LATENCY:           u8 = 0x3F;
 
+// Command
+pub const IO_SPACE: u16 = 0x0001;
+pub const MEMORY_SPACE: u16 = 0x0002;
+pub const BUS_MASTER: u16 = 0x0004;
+pub const SPECIAL_CYCLES: u16 = 0x0008;
+pub const MEMORY_WRITE_AND_INVALIDATE: u16 = 0x0010;
+pub const VGA_PALETTE_SNOOP: u16 = 0x0020;
+pub const PARITY_ERROR_RESPONSE: u16 = 0x0040;
+pub const SERR_ENABLE: u16 = 0x0100;
+pub const FAST_BACK_TO_BACK: u16 = 0x0200;
+pub const INTERRUPT_DISABLE: u16 = 0x0400;
+
 #[repr(u8)]
 pub enum PciCapability {
     Msi  = 0x05,
@@ -266,31 +278,23 @@ impl PciLocation {
         }
     }
 
-    /// Sets the PCI device's bit 3 in the command portion, which is apparently needed to activate DMA (??)
-    pub fn pci_set_command_bus_master_bit(&self) {
+    pub fn pci_set_command_register_bit(&self, data: u16) {
         unsafe { 
             PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(PCI_COMMAND));
         }
         let command = Self::read_data_port(); 
-        println!("pci_set_command_bus_master_bit: PciDevice: {}, read value: {:#x}", self, command);
-        const BUS_MASTER: u32 = 1 << 2;
-        Self::write_data_port(command | BUS_MASTER);
-        println!("pci_set_command_bus_master_bit: PciDevice: {}, read value AFTER WRITE CMD: {:#x}", 
-            self, Self::read_data_port()
-        );
-    }
-
-    /// Sets the PCI device's command bit 10 to disable legacy interrupts
-    pub fn pci_set_interrupt_disable_bit(&self) {
-        unsafe { 
-            PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(PCI_COMMAND));
+        println!("pci_set_command_register_bit: PciDevice: {}, read value: {:#x}, data: {:#x}", 
+                    self, command, data
+                );
+        if command & data as u32 == 0 {
+            Self::write_data_port(command | data as u32);
+            println!("pci_set_command_register_bit: read value AFTER WRITE CMD: {:#x}", 
+                        Self::read_data_port()
+            );
         }
-        let command = Self::read_data_port(); 
-        println!("pci_set_interrupt_disable_bit: PciDevice: {}, read value: {:#x}", self, command);
-        const INTERRUPT_DISABLE: u32 = 1 << 10;
-        Self::write_data_port(command | INTERRUPT_DISABLE);
-        println!("pci_set_interrupt_disable_bit: PciDevice: {} read value AFTER WRITE CMD: {:#x}", 
-            self, Self::read_data_port());
+        else {
+            println!("Bit already set!")
+        }
     }
 
     pub fn pci_show_header_register(&self, reg: u8) {
