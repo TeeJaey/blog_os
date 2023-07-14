@@ -15,34 +15,42 @@ use lazy_static::lazy_static;
 
 // The below constants define the PCI configuration space. 
 // More info here: <http://wiki.osdev.org/PCI#PCI_Device_Structure>
-const PCI_VENDOR_ID:             u8 = 0x0;
-const PCI_DEVICE_ID:             u8 = 0x2;
-const PCI_COMMAND:               u8 = 0x4;
-const PCI_STATUS:                u8 = 0x6;
-const PCI_REVISION_ID:           u8 = 0x8;
-const PCI_PROG_IF:               u8 = 0x9;
-const PCI_SUBCLASS:              u8 = 0xA;
-const PCI_CLASS:                 u8 = 0xB;
-const PCI_CACHE_LINE_SIZE:       u8 = 0xC;
-const PCI_LATENCY_TIMER:         u8 = 0xD;
-const PCI_HEADER_TYPE:           u8 = 0xE;
-const PCI_BIST:                  u8 = 0xF;
-const PCI_BAR0:                  u8 = 0x10;
-const PCI_BAR1:                  u8 = 0x14;
-const PCI_BAR2:                  u8 = 0x18;
-const PCI_BAR3:                  u8 = 0x1C;
-const PCI_BAR4:                  u8 = 0x20;
-const PCI_BAR5:                  u8 = 0x24;
-const PCI_CARDBUS_CIS:           u8 = 0x28;
-const PCI_SUBSYSTEM_VENDOR_ID:   u8 = 0x2C;
-const PCI_SUBSYSTEM_ID:          u8 = 0x2E;
-const PCI_EXPANSION_ROM_BASE:    u8 = 0x30;
-const PCI_CAPABILITIES:          u8 = 0x34;
+
+pub const PCI_VENDOR_ID:             u8 = 0x0;
+pub const PCI_DEVICE_ID:             u8 = 0x2;
+pub const PCI_COMMAND:               u8 = 0x4;
+pub const PCI_STATUS:                u8 = 0x6;
+pub const PCI_REVISION_ID:           u8 = 0x8;
+pub const PCI_PROG_IF:               u8 = 0x9;
+pub const PCI_SUBCLASS:              u8 = 0xA;
+pub const PCI_CLASS:                 u8 = 0xB;
+pub const PCI_CACHE_LINE_SIZE:       u8 = 0xC;
+pub const PCI_LATENCY_TIMER:         u8 = 0xD;
+pub const PCI_HEADER_TYPE:           u8 = 0xE;
+pub const PCI_BIST:                  u8 = 0xF;
+pub const PCI_BAR0:                  u8 = 0x10;
+pub const PCI_BAR1:                  u8 = 0x14;
+pub const PCI_BAR2:                  u8 = 0x18;
+pub const PCI_BAR3:                  u8 = 0x1C;
+pub const PCI_BAR4:                  u8 = 0x20;
+pub const PCI_BAR5:                  u8 = 0x24;
+pub const PCI_CARDBUS_CIS:           u8 = 0x28;
+pub const PCI_SUBSYSTEM_VENDOR_ID:   u8 = 0x2C;
+pub const PCI_SUBSYSTEM_ID:          u8 = 0x2E;
+pub const PCI_EXPANSION_ROM_BASE:    u8 = 0x30;
+pub const PCI_CAPABILITIES:          u8 = 0x34;
 // 0x35 through 0x3B are reserved
-const PCI_INTERRUPT_LINE:        u8 = 0x3C;
-const PCI_INTERRUPT_PIN:         u8 = 0x3D;
-const PCI_MIN_GRANT:             u8 = 0x3E;
-const PCI_MAX_LATENCY:           u8 = 0x3F;
+pub const PCI_INTERRUPT_LINE:        u8 = 0x3C;
+pub const PCI_INTERRUPT_PIN:         u8 = 0x3D;
+pub const PCI_MIN_GRANT:             u8 = 0x3E;
+pub const PCI_MAX_LATENCY:           u8 = 0x3F;
+
+#[repr(u8)]
+pub enum PciCapability {
+    Msi  = 0x05,
+    Msix = 0x11,
+}
+
 
 /// If a BAR's bits [2:1] equal this value, that BAR describes a 64-bit address.
 /// If not, that BAR describes a 32-bit address.
@@ -67,18 +75,6 @@ static PCI_CONFIG_ADDRESS_PORT: Mutex<Port<u32>> = Mutex::new(Port::new(CONFIG_A
 /// This port is used to transfer data to or from the PCI configuration space
 /// specified by a previous write to the `PCI_CONFIG_ADDRESS_PORT`.
 static PCI_CONFIG_DATA_PORT: Mutex<Port<u32>> = Mutex::new(Port::new(CONFIG_DATA));
-
-pub fn init() {
-    println!("{}", isize::MAX);
-
-    let bus_list = get_pci_buses();
-    for bus in bus_list {
-        let dev_list = &bus.devices;
-        for dev in dev_list {
-            println!("location:{} VID:{} DID:{}", dev.location, dev.vendor_id, dev.device_id);
-        }
-    }
-}
 
 /// Returns a list of all PCI buses in this system.
 /// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
@@ -108,12 +104,12 @@ pub fn get_pci_device_bsf(bus: u8, slot: u8, func: u8) -> Option<&'static PciDev
 /// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
 pub fn get_pci_device_id(vendor: u16, device: u16) -> Option<&'static PciDevice> {
     for b in get_pci_buses() {
-            for d in &b.devices {
-                if d.vendor_id == vendor && d.device_id == device {
+        for d in &b.devices {
+            if d.vendor_id == vendor && d.device_id == device {
                     return Some(d);
                 }
             }
-    }
+        }
     None
 }
 
@@ -229,39 +225,33 @@ impl PciLocation {
     }
 
     /// read 32-bit data at the specified `offset` from the PCI device specified by the given `bus`, `slot`, `func` set.
-    pub fn pci_read_32(&self, offset: u8) -> u32 {
-        let addr = self.pci_address(offset);
-        println!("reading address: {}", addr);
+    fn pci_read_32(&self, offset: u8) -> u32 {
         unsafe { 
-            PCI_CONFIG_ADDRESS_PORT.lock().write(addr); 
+            PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(offset)); 
         }
-        Self::read_data_port() >> ((offset & (!PCI_CONFIG_ADDRESS_OFFSET_MASK)) * 8)
+        let val: u32 = Self::read_data_port();
+        let shift = (offset & (!PCI_CONFIG_ADDRESS_OFFSET_MASK)) * 8;
+        val >> shift
     }
 
     /// Read 16-bit data at the specified `offset` from this PCI device.
-    pub fn pci_read_16(&self, offset: u8) -> u16 {
+    fn pci_read_16(&self, offset: u8) -> u16 {
         self.pci_read_32(offset) as u16
     } 
 
     /// Read 8-bit data at the specified `offset` from the PCI device.
-    pub fn pci_read_8(&self, offset: u8) -> u8 {
+    fn pci_read_8(&self, offset: u8) -> u8 {
         self.pci_read_32(offset) as u8
     }
 
     /// Write 32-bit data to the specified `offset` for the PCI device.
-    pub fn pci_write_32(&self, offset: u8, value: u32) {
+    pub fn pci_write(&self, offset: u8, value: u32) {
         unsafe {
             PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(offset));
-            Self::write_data_port((value) << ((offset & 2) * 8));
         }
-    }
-
-    pub fn pci_write_16(&self, offset: u8, value: u16) {
-        self.pci_write_32(offset, value as u32)
-    }
-
-    pub fn pci_write_8(&self, offset: u8, value: u8) {
-        self.pci_write_32(offset, value as u32)
+        let shift = (offset & 2) * 8;
+        let data = value << shift;
+        Self::write_data_port(data);
     }
 
     fn write_data_port(value: u32) {
@@ -281,12 +271,12 @@ impl PciLocation {
         unsafe { 
             PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(PCI_COMMAND));
         }
-        let inval = Self::read_data_port(); 
-        println!("pci_set_command_bus_master_bit: PciDevice: {}, read value: {:#x}", self, inval);
-        Self::write_data_port(inval | (1 << 2));
+        let command = Self::read_data_port(); 
+        println!("pci_set_command_bus_master_bit: PciDevice: {}, read value: {:#x}", self, command);
+        const BUS_MASTER: u32 = 1 << 2;
+        Self::write_data_port(command | BUS_MASTER);
         println!("pci_set_command_bus_master_bit: PciDevice: {}, read value AFTER WRITE CMD: {:#x}", 
-            self,
-            Self::read_data_port()
+            self, Self::read_data_port()
         );
     }
 
@@ -301,6 +291,58 @@ impl PciLocation {
         Self::write_data_port(command | INTERRUPT_DISABLE);
         println!("pci_set_interrupt_disable_bit: PciDevice: {} read value AFTER WRITE CMD: {:#x}", 
             self, Self::read_data_port());
+    }
+
+    pub fn pci_show_header_register(&self, reg: u8) {
+        unsafe { 
+            PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(reg));
+        }
+        let tmp = Self::read_data_port(); 
+        println!("content in pci_header_register {:#x} of PCI-Device {}: {:#x}", reg, self, tmp);
+
+    }
+
+    /// Explores the PCI config space and returns address of requested capability, if present. 
+    /// PCI capabilities are stored as a linked list in the PCI config space, 
+    /// with each capability storing the pointer to the next capability right after its ID.
+    /// The function returns a None value if capabilities are not valid for this device 
+    /// or if the requested capability is not present. 
+    fn find_pci_capability(&self, pci_capability: PciCapability) -> Option<u8> {
+        let pci_capability = pci_capability as u8;
+        let status = self.pci_read_16(PCI_STATUS);
+
+        // capabilities are only valid if bit 4 of status register is set
+        const CAPABILITIES_VALID: u16 = 1 << 4;
+        if  status & CAPABILITIES_VALID != 0 {
+
+            // retrieve the capabilities pointer from the pci config space
+            let capabilities = self.pci_read_8(PCI_CAPABILITIES);
+            // debug!("capabilities pointer: {:#X}", capabilities);
+
+            // mask the bottom 2 bits of the capabilities pointer to find the address of the first capability
+            let mut cap_addr = capabilities & 0xFC;
+
+            // the last capability will have its next pointer equal to zero
+            let final_capability = 0;
+
+            // iterate through the linked list of capabilities until the requested capability is found or the list reaches its end
+            while cap_addr != final_capability {
+                // the capability header is a 16 bit value which contains the current capability ID and the pointer to the next capability
+                let cap_header = self.pci_read_16(cap_addr);
+
+                // the id is the lower byte of the header
+                let cap_id = (cap_header & 0xFF) as u8;
+                
+                if cap_id == pci_capability {
+                    println!("Found capability: {:#X} at {:#X}", pci_capability, cap_addr);
+                    return Some(cap_addr);
+                }
+
+                // find address of next capability which is the higher byte of the header
+                cap_addr = ((cap_header >> 8) & 0xFF) as u8;            
+            }
+        }
+        None
     }
 
 }
@@ -384,6 +426,7 @@ impl PciDevice {
             // Also, clear the bottom 4 bits because it's a 16-byte aligned address.
             PhysAddr::new(*bar.set_bits(0..4, 0) as u64)
         };  
+        println!("mem_base of PCI-Device {} for BAR {}: {:#x}", self.location, bar_index, mem_base);
         Ok(mem_base)
     }
 
@@ -406,13 +449,25 @@ impl PciDevice {
         let bar_offset = PCI_BAR0 + (bar_index as u8 * 4);
         let original_value = self.bars[bar_index];
 
-        self.pci_write_32(bar_offset, 0xFFFF_FFFF);          // Step 1
+        self.pci_write(bar_offset, 0xFFFF_FFFF);          // Step 1
         let mut mem_size = self.pci_read_32(bar_offset);  // Step 2
         mem_size.set_bits(0..4, 0);                       // Step 3
         mem_size = !(mem_size);                           // Step 4
         mem_size += 1;                                    // Step 4
-        self.pci_write_32(bar_offset, original_value);       // Step 5
+        self.pci_write(bar_offset, original_value);       // Step 5
         mem_size
+    }
+
+    pub fn determine_iobase(&self, bar_index: usize) -> Result<u32, &'static str> {
+        let bar = if let Some(bar_value) = self.bars.get(bar_index) {
+            *bar_value
+        } else {
+            return Err("BAR index must be between 0 and 5 inclusive");
+        };
+
+        let iobase = bar & 0xFFFFFFFC;
+        println!("iobase of PCI-Device {} for BAR {}: {:#x}", self.location, bar_index, iobase);
+        Ok(iobase)
     }
 
 }
@@ -427,11 +482,4 @@ impl DerefMut for PciDevice {
     fn deref_mut(&mut self) -> &mut PciLocation {
         &mut self.location
     }
-}
-
-/// Lists the 2 possible PCI configuration space access mechanisms
-/// that can be found from the LSB of the devices's BAR0
-pub enum PciConfigSpaceAccessMechanism {
-    MemoryMapped = 0,
-    IoPort = 1,
 }
