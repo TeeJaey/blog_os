@@ -29,3 +29,5 @@ pub fn eth_send_packet(dst_mac: [u8; 6], protocol: u16, payload: Vec<u8>) {
 
     rtl8139::rtl_send_packet(frame_data.as_ptr(), len)
 }
+
+//hellp
