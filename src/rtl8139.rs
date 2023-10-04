@@ -3,18 +3,17 @@
 use crate::{
     println,
     pci,
+    ethernet::EthernetFrame
 };
 use alloc::vec::Vec;
 use x86_64::instructions::port::Port;
 use spin::Mutex;
-
+use lazy_static::lazy_static;
 
 const RTL8139_VENDOR_ID: u16 = 0x10EC;
 const RTL8139_DEVICE_ID: u16 = 0x8139;
 const BUFFER_SIZE: u32 = 8 * 1024 + 16 + 1500;
 const TRANSMIT_DESCRIPTOR_COUNT: u8 = 4;
-
-
 
 // Register
 const ID: u8 = 0x00;
@@ -78,6 +77,39 @@ const BROADCAST: u32 = 0x2000;
 const PHYSICAL_ADDRESS: u32 = 0x4000;
 const MULTICAST: u32 = 0x8000;
 
+#[derive(Debug)]
+pub struct Rtl8139Info {
+    io_addr: u16,
+    mac_addr: [u8; 6]
+}
+
+impl Default for Rtl8139Info {
+    fn default() -> Self {
+        Self {  io_addr: 0,
+                mac_addr: [00,00,00,00,00,00]
+        }
+    }
+}
+
+impl Rtl8139Info {
+    fn new(mac_addr: [u8; 6], io_addr: u16) -> Self {
+        Self { mac_addr, io_addr}
+    }
+    fn io_addr(&self) -> u16 {
+        self.io_addr
+    }
+    fn mac_addr(&self) -> [u8; 6] {
+        self.mac_addr
+    }
+}
+
+lazy_static! {
+    static ref RX_BUFFER: Vec<u8> = Vec::with_capacity(BUFFER_SIZE as usize);
+    static ref RTL8139: Mutex<Rtl8139Info> = Mutex::new(Rtl8139Info::default());
+}
+
+static mut RR_CURRENT: u8 = 0;
+
 pub fn init() {
     let bus_list = pci::get_pci_buses();
     for bus in bus_list {
@@ -90,75 +122,109 @@ pub fn init() {
     let opt_rtl8139 = pci::get_pci_device_id(RTL8139_VENDOR_ID, RTL8139_DEVICE_ID);
     
     if opt_rtl8139.is_some() {
-        let rtl8139 = opt_rtl8139.unwrap();
+        let rtl8139_dev = opt_rtl8139.unwrap();
 
-        rtl8139.pci_set_command_register_bit(pci::BUS_MASTER);
-        rtl8139.pci_set_command_register_bit(pci::IO_SPACE);
+        rtl8139_dev.pci_set_command_register_bit(pci::BUS_MASTER);
+        rtl8139_dev.pci_set_command_register_bit(pci::IO_SPACE);
 
-        let ioaddr = rtl8139.determine_iobase(0).unwrap() as u16;
+        let ioaddr= rtl8139_dev.determine_iobase(0).unwrap() as u16;
+        RTL8139.lock().io_addr = ioaddr;
 
-        println!("{:#x}", io_read_8(ioaddr, 0x0));
-        println!("{:#x}", io_read_8(ioaddr, 0x1));
-        println!("{:#x}", io_read_8(ioaddr, 0x2));
-        println!("{:#x}", io_read_8(ioaddr, 0x3));
-        println!("{:#x}", io_read_8(ioaddr, 0x4));
-        println!("{:#x}", io_read_8(ioaddr, 0x5));
+        let mac = get_mac_address();
+        RTL8139.lock().mac_addr = mac;
+        
 
         println!("Powering on / Waking up RTL8139");
 
-        io_write_8(ioaddr, CONFIG_1, 0x0);
+        io_write_8(CONFIG_1, 0x0);
         
         println!("Performing software reset");
         
-        io_write_8(ioaddr, COMMAND, RESET);
-        while (io_read_8(ioaddr, COMMAND) & RESET) != 0 {
+        io_write_8(COMMAND, RESET);
+        while (io_read_8(COMMAND) & RESET) != 0 {
             println!("RST-Bit is still high (1)");
         }
 
         println!("Masking interrupts");
-        io_write_16(ioaddr, INTERRUPT_MASK, RECEIVE_OK | RECEIVE_ERROR | TRANSMIT_OK | TRANSMIT_ERROR);
+
+        io_write_16(INTERRUPT_MASK, RECEIVE_OK | RECEIVE_ERROR | TRANSMIT_OK | TRANSMIT_ERROR);
 
         println!("Enabling receiver/transmitter");
-        io_write_8(ioaddr, COMMAND, ENABLE_RECEIVER | ENABLE_TRANSMITTER);
+
+        io_write_8(COMMAND, ENABLE_RECEIVER | ENABLE_TRANSMITTER);
 
         println!("Configuring receive buffer");
-        let receive_buffer: Vec<u8> = Vec::with_capacity(BUFFER_SIZE as usize);
-        let receive_buffer_addr: u32 = receive_buffer.as_ptr() as u32;
 
-        io_write_32(ioaddr, RECEIVE_BUFFER_START, receive_buffer_addr);
-        io_write_32(ioaddr, RECEIVE_CONFIGURATION, WRAP | ACCEPT_PHYSICAL_MATCH | ACCEPT_BROADCAST | LENGTH_8K);
+        let receive_buffer_addr = RX_BUFFER.as_ptr();
+        io_write_32(RECEIVE_BUFFER_START, receive_buffer_addr as u32);
+        io_write_32(RECEIVE_CONFIGURATION, WRAP | ACCEPT_PHYSICAL_MATCH | ACCEPT_BROADCAST | LENGTH_8K);
     }
 }
 
-fn io_read_8(iobase: u16, offset: u8) -> u8 {
-    let io_port: Mutex<Port<u8>> = Mutex::new(Port::new(iobase + offset as u16));
+pub fn get_mac_address() -> [u8; 6] {
+    let mut address: [u8; 6] = [0; 6];
+    for i in 0..6 {
+        address[i] = io_read_8(i as u8);
+    }
+    return address;
+}
+
+pub fn rtl_send_packet(frame_ptr: *const EthernetFrame, len: usize) {
+
+    let buffer: *const u32 = frame_ptr as *const u32;
+    let size: u32 = len as u32;
+    
+    set_transmit_buffer(buffer);
+    set_transmit_status(size);
+
+    unsafe {
+        RR_CURRENT += 1;
+    }
+
+}
+
+fn set_transmit_buffer(buffer: *const u32) {
+    unsafe{
+        io_write_32(TRANSMIT_ADDRESS +(4 * RR_CURRENT), buffer as u32)
+    }
+    
+}
+
+fn set_transmit_status(size: u32) {
+    unsafe{
+        io_write_32(TRANSMIT_STATUS +(4 * RR_CURRENT), size)
+    }
+}
+
+fn io_read_8(offset: u8) -> u8 {
+    let io_port: Mutex<Port<u8>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
     let res = unsafe{io_port.lock().read()};
     res
 }
 
-fn io_read_16(iobase: u16, offset: u8) -> u16 {
-    let io_port: Mutex<Port<u16>> = Mutex::new(Port::new(iobase + offset as u16));
+fn io_read_16(offset: u8) -> u16 {
+    let io_port: Mutex<Port<u16>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
     let res = unsafe{io_port.lock().read()};
     res
 }
 
-fn io_read_32(iobase: u16, offset: u8) -> u32 {
-    let io_port: Mutex<Port<u32>> = Mutex::new(Port::new(iobase + offset as u16));
+fn io_read_32(offset: u8) -> u32 {
+    let io_port: Mutex<Port<u32>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
     let res = unsafe{io_port.lock().read()};
     res
 }
 
-fn io_write_8(iobase: u16, offset: u8, value: u8) {
-    let io_port: Mutex<Port<u8>> = Mutex::new(Port::new(iobase + offset as u16));
+fn io_write_8(offset: u8, value: u8) {
+    let io_port: Mutex<Port<u8>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
     unsafe{io_port.lock().write(value);}
 }
 
-fn io_write_16(iobase: u16, offset: u8, value: u16) {
-    let io_port: Mutex<Port<u16>> = Mutex::new(Port::new(iobase + offset as u16));
+fn io_write_16(offset: u8, value: u16) {
+    let io_port: Mutex<Port<u16>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
     unsafe{io_port.lock().write(value);}
 }
 
-fn io_write_32(iobase: u16, offset: u8, value: u32) {
-    let io_port: Mutex<Port<u32>> = Mutex::new(Port::new(iobase + offset as u16));
+fn io_write_32(offset: u8, value: u32) {
+    let io_port: Mutex<Port<u32>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
     unsafe{io_port.lock().write(value);}
 }

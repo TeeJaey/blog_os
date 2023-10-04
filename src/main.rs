@@ -27,7 +27,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    blog_os::load_pci();
+    blog_os::init_rtl8139();
+    blog_os::send_empty_frame();
 
     #[cfg(test)]
     test_main();
