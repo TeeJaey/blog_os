@@ -6,16 +6,32 @@
 
 extern crate alloc;
 
-use blog_os::println;
-use blog_os::task::{executor::Executor, keyboard, Task};
-use bootloader::{entry_point, BootInfo};
+use blog_os::{
+    println,
+    task::{
+        executor::Executor, 
+        keyboard, 
+        Task
+    }
+};
+use bootloader::{
+    entry_point, 
+    BootInfo
+};
 use core::panic::PanicInfo;
 
 entry_point!(kernel_main);
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    use blog_os::allocator;
-    use blog_os::memory::{self, BootInfoFrameAllocator};
+    use blog_os::{
+        allocator,
+        memory::{
+            self, 
+            BootInfoFrameAllocator
+        },
+        rtl8139,
+        ethernet
+    };
     use x86_64::VirtAddr;
 
     println!("Hello World{}", "!");
@@ -27,8 +43,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    blog_os::init_rtl8139();
-    blog_os::send_empty_frame();
+    println!("{}", mapper.phys_offset().as_u64());
+
+    rtl8139::init(mapper);
+    for _ in 0..5 {
+        ethernet::send_empty_frame();
+    }
 
     #[cfg(test)]
     test_main();

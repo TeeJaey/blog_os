@@ -2,11 +2,9 @@
 
 use crate::{
     println,
-    pci,
-    ethernet::EthernetFrame
+    pci
 };
-use alloc::vec::Vec;
-use x86_64::instructions::port::Port;
+use x86_64::{instructions::port::Port, structures::paging::OffsetPageTable};
 use spin::Mutex;
 use lazy_static::lazy_static;
 
@@ -104,13 +102,13 @@ impl Rtl8139Info {
 }
 
 lazy_static! {
-    static ref RX_BUFFER: Vec<u8> = Vec::with_capacity(BUFFER_SIZE as usize);
     static ref RTL8139: Mutex<Rtl8139Info> = Mutex::new(Rtl8139Info::default());
 }
 
+static mut RX_BUFFER: [u8; BUFFER_SIZE as usize] = [0; BUFFER_SIZE as usize];
 static mut RR_CURRENT: u8 = 0;
 
-pub fn init() {
+pub fn init(mapper: OffsetPageTable) {
     let bus_list = pci::get_pci_buses();
     for bus in bus_list {
         let dev_list = &bus.devices;
@@ -135,29 +133,29 @@ pub fn init() {
         
 
         println!("Powering on / Waking up RTL8139");
-
         io_write_8(CONFIG_1, 0x0);
         
         println!("Performing software reset");
-        
         io_write_8(COMMAND, RESET);
         while (io_read_8(COMMAND) & RESET) != 0 {
             println!("RST-Bit is still high (1)");
         }
 
         println!("Masking interrupts");
-
         io_write_16(INTERRUPT_MASK, RECEIVE_OK | RECEIVE_ERROR | TRANSMIT_OK | TRANSMIT_ERROR);
 
         println!("Enabling receiver/transmitter");
-
         io_write_8(COMMAND, ENABLE_RECEIVER | ENABLE_TRANSMITTER);
 
         println!("Configuring receive buffer");
-
-        let receive_buffer_addr = RX_BUFFER.as_ptr();
-        io_write_32(RECEIVE_BUFFER_START, receive_buffer_addr as u32);
-        io_write_32(RECEIVE_CONFIGURATION, WRAP | ACCEPT_PHYSICAL_MATCH | ACCEPT_BROADCAST | LENGTH_8K);
+        unsafe {
+            let rxbuf_virt_addr = &RX_BUFFER as *const _ as u64;
+            let rxbuf_phys_addr = rxbuf_virt_addr + mapper.phys_offset().as_u64();
+            io_write_32(RECEIVE_BUFFER_START, rxbuf_phys_addr as u32);
+            println!("RECEIVE_BUFFER_START: {}", io_read_32(RECEIVE_BUFFER_START));
+            io_write_32(RECEIVE_CONFIGURATION, WRAP | ACCEPT_PHYSICAL_MATCH | ACCEPT_BROADCAST | LENGTH_8K);
+            println!("RECEIVE_CONFIGURATION: {}", io_read_32(RECEIVE_CONFIGURATION));
+        }
     }
 }
 
@@ -169,30 +167,38 @@ pub fn get_mac_address() -> [u8; 6] {
     return address;
 }
 
-pub fn rtl_send_packet(frame_ptr: *const EthernetFrame, len: usize) {
+pub fn rtl_send_packet(frame_virtaddr: u64, len: usize) {
 
-    let buffer: *const u32 = frame_ptr as *const u32;
+    let buffer = frame_virtaddr as u32;
     let size: u32 = len as u32;
     
-    set_transmit_buffer(buffer);
+    set_transmit_buffer(buffer); 
     set_transmit_status(size);
 
+
     unsafe {
-        RR_CURRENT += 1;
+        if RR_CURRENT == 3 {
+            RR_CURRENT = 0;
+        } else {
+            RR_CURRENT += 1;
+        }
     }
 
 }
 
-fn set_transmit_buffer(buffer: *const u32) {
+fn set_transmit_buffer(buffer: u32) {
     unsafe{
-        io_write_32(TRANSMIT_ADDRESS +(4 * RR_CURRENT), buffer as u32)
+        let offset = TRANSMIT_ADDRESS +(4 * RR_CURRENT);
+        io_write_32(offset, buffer);
+        println!("{}", io_read_32(offset))
     }
-    
 }
 
 fn set_transmit_status(size: u32) {
     unsafe{
-        io_write_32(TRANSMIT_STATUS +(4 * RR_CURRENT), size)
+        let offset = TRANSMIT_STATUS +(4 * RR_CURRENT);
+        io_write_32(offset, size);
+        println!("{}", io_read_32(offset))
     }
 }
 
