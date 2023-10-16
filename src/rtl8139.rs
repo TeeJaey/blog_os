@@ -2,9 +2,12 @@
 
 use crate::{
     println,
-    pci
+    pci, memory
 };
-use x86_64::{instructions::port::Port, structures::paging::OffsetPageTable};
+use x86_64::{
+    instructions::port::Port,
+    VirtAddr
+};
 use spin::Mutex;
 use lazy_static::lazy_static;
 
@@ -108,7 +111,7 @@ lazy_static! {
 static mut RX_BUFFER: [u8; BUFFER_SIZE as usize] = [0; BUFFER_SIZE as usize];
 static mut RR_CURRENT: u8 = 0;
 
-pub fn init(mapper: OffsetPageTable) {
+pub fn init(physical_memory_offset: VirtAddr) {
     let bus_list = pci::get_pci_buses();
     for bus in bus_list {
         let dev_list = &bus.devices;
@@ -149,8 +152,10 @@ pub fn init(mapper: OffsetPageTable) {
 
         println!("Configuring receive buffer");
         unsafe {
-            let rxbuf_virt_addr = &RX_BUFFER as *const _ as u64;
-            let rxbuf_phys_addr = rxbuf_virt_addr + mapper.phys_offset().as_u64();
+            let rxbuf_virt_addr = VirtAddr::new_unsafe(RX_BUFFER.as_ptr() as u64);
+            let virt_to_phys = memory::translate_addr(rxbuf_virt_addr, physical_memory_offset);
+            let rxbuf_phys_addr = virt_to_phys.unwrap().as_u64() as u32;
+
             io_write_32(RECEIVE_BUFFER_START, rxbuf_phys_addr as u32);
             println!("RECEIVE_BUFFER_START: {}", io_read_32(RECEIVE_BUFFER_START));
             io_write_32(RECEIVE_CONFIGURATION, WRAP | ACCEPT_PHYSICAL_MATCH | ACCEPT_BROADCAST | LENGTH_8K);
@@ -167,9 +172,10 @@ pub fn get_mac_address() -> [u8; 6] {
     return address;
 }
 
-pub fn rtl_send_packet(frame_virtaddr: u64, len: usize) {
+pub fn rtl_send_packet(frame_virt_addr: VirtAddr, len: usize, physical_memory_offset: VirtAddr) {
 
-    let buffer = frame_virtaddr as u32;
+    let virt_to_phys = unsafe {memory::translate_addr(frame_virt_addr, physical_memory_offset)};
+    let buffer = virt_to_phys.unwrap().as_u64() as u32;
     let size: u32 = len as u32;
     
     set_transmit_buffer(buffer); 
@@ -190,7 +196,7 @@ fn set_transmit_buffer(buffer: u32) {
     unsafe{
         let offset = TRANSMIT_ADDRESS +(4 * RR_CURRENT);
         io_write_32(offset, buffer);
-        println!("{}", io_read_32(offset))
+        // println!("{}", io_read_32(offset))
     }
 }
 
@@ -198,7 +204,7 @@ fn set_transmit_status(size: u32) {
     unsafe{
         let offset = TRANSMIT_STATUS +(4 * RR_CURRENT);
         io_write_32(offset, size);
-        println!("{}", io_read_32(offset))
+        // println!("{}", io_read_32(offset))
     }
 }
 
