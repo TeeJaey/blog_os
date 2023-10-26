@@ -12,7 +12,7 @@ use blog_os::{
         executor::Executor, 
         keyboard, 
         Task
-    }, memory::translate_addr
+    }
 };
 use bootloader::{
     entry_point, 
@@ -39,15 +39,15 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     blog_os::init();
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
-
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
+    /* 
     let addresses = [
         // the identity-mapped vga buffer page
-        0xb8000,
+         0xb8000,
         // some code page
         0x201008,
         // some stack page
@@ -56,14 +56,18 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     for &address in &addresses {
         let virt = VirtAddr::new(address);
-        let phys = unsafe { translate_addr(virt, phys_mem_offset) };
+        let phys = unsafe { translate_addr(virt) };
         println!("{:?} -> {:?}", virt, phys);
     }
-
-    rtl8139::init(phys_mem_offset);
+    */
+    
+    
+    rtl8139::init();
     for _ in 0..5 {
-        ethernet::send_empty_frame(phys_mem_offset);
+        ethernet::send_empty_frame();
     }
+
+    ethernet::wait_for_receive();
 
     #[cfg(test)]
     test_main();
@@ -88,14 +92,16 @@ fn panic(info: &PanicInfo) -> ! {
     blog_os::test_panic_handler(info)
 }
 
-// async fn async_number() -> u32 {
-//     42
-// }
+/*
+async fn async_number() -> u32 {
+    42
+}
 
-// async fn example_task() {
-//     let number = async_number().await;
-//     println!("async number: {}", number);
-// }
+async fn example_task() {
+    let number = async_number().await;
+    println!("async number: {}", number);
+}
+*/
 
 #[test_case]
 fn trivial_assertion() {

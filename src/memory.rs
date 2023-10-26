@@ -6,6 +6,12 @@ use x86_64::{
     structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
     PhysAddr, VirtAddr,
 };
+use spin::Mutex;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref MEMORY_SERVICE: Mutex<MemoryService> = Mutex::new(MemoryService::new());
+}
 
 /// Initialize a new OffsetPageTable.
 ///
@@ -14,6 +20,7 @@ use x86_64::{
 /// `physical_memory_offset`. Also, this function must be only called once
 /// to avoid aliasing `&mut` references (which is undefined behavior).
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
+    MEMORY_SERVICE.lock().set_physical_memory_offset(physical_memory_offset);
     let level_4_table = active_level_4_table(physical_memory_offset);
     OffsetPageTable::new(level_4_table, physical_memory_offset)
 }
@@ -86,10 +93,10 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
     }
 }
 
-pub unsafe fn translate_addr(addr: VirtAddr, physical_memory_offset: VirtAddr)
+pub unsafe fn translate_addr(addr: VirtAddr)
     -> Option<PhysAddr>
 {
-    translate_addr_inner(addr, physical_memory_offset)
+    translate_addr_inner(addr, MEMORY_SERVICE.lock().physical_memory_offset)
 }
 
 /// Private function that is called by `translate_addr`.
@@ -129,4 +136,18 @@ fn translate_addr_inner(addr: VirtAddr, physical_memory_offset: VirtAddr)
 
     // calculate the physical address by adding the page offset
     Some(frame.start_address() + u64::from(addr.page_offset()))
+}
+
+struct MemoryService {
+    physical_memory_offset: VirtAddr,
+}
+
+impl MemoryService {
+    fn new() -> MemoryService {
+        MemoryService { physical_memory_offset: VirtAddr::zero()}
+    }
+
+    fn set_physical_memory_offset(&mut self, offset: VirtAddr) {
+        self.physical_memory_offset = offset;
+    }
 }
