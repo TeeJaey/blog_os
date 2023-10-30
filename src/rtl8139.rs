@@ -2,7 +2,7 @@
 
 use crate::{
     println,
-    pci, memory
+    pci, memory, interrupts
 };
 use alloc::vec::Vec;
 use x86_64::{
@@ -94,26 +94,31 @@ lazy_static! {
 #[derive(Debug)]
 pub struct Rtl8139Info {
     io_addr: u16,
-    mac_addr: [u8; 6]
+    mac_addr: [u8; 6],
+    int_line: u8,
 }
 
 impl Default for Rtl8139Info {
     fn default() -> Self {
         Self {  io_addr: 0,
-                mac_addr: [00,00,00,00,00,00]
+                mac_addr: [00,00,00,00,00,00],
+                int_line: 0,
         }
     }
 }
 
 impl Rtl8139Info {
-    fn new(mac_addr: [u8; 6], io_addr: u16) -> Self {
-        Self { mac_addr, io_addr}
+    fn new(mac_addr: [u8; 6], io_addr: u16, int_line: u8) -> Self {
+        Self {mac_addr, io_addr, int_line}
     }
     fn io_addr(&self) -> u16 {
         self.io_addr
     }
     fn mac_addr(&self) -> [u8; 6] {
         self.mac_addr
+    }
+    fn int_line(&self) -> u8 {
+        self.int_line
     }
 }
 
@@ -140,6 +145,7 @@ pub fn init() {
         RTL8139.lock().io_addr = ioaddr;
 
         RTL8139.lock().mac_addr = get_mac_address();
+        RTL8139.lock().int_line = rtl8139_dev.int_line;
         
         println!("Powering on / Waking up RTL8139");
         io_write_8(CONFIG_1, 0x0);
@@ -171,21 +177,6 @@ pub fn init() {
     }
 }
 
-fn rtl_interrupt_handler() {
-
-    let _received_packets: Vec<Vec<u8>> = Vec::new();
-
-	let status = io_read_16(INTERRUPT_STATUS);
-	io_write_16(INTERRUPT_STATUS, RECEIVE_OK | TRANSMIT_OK);
-	if (status & TRANSMIT_OK) != 0 {
-		// Sent
-	}
-	if (status & RECEIVE_OK) != 0 {
-		// Received
-		rtl_receive_packet();
-	}
-}
-
 pub fn get_mac_address() -> [u8; 6] {
     return [
         io_read_8(ID0),
@@ -197,7 +188,30 @@ pub fn get_mac_address() -> [u8; 6] {
     ]
 }
 
-pub fn rtl_send_packet(buffer_virt_addr: VirtAddr, len: u32) {
+pub fn handle_interrupt() {
+	let status = io_read_16(INTERRUPT_STATUS);
+	io_write_16(INTERRUPT_STATUS, RECEIVE_OK | TRANSMIT_OK | RECEIVE_ERROR | TRANSMIT_ERROR);
+	
+    if (status & RECEIVE_OK) != 0 {
+		// Received
+        println!("RTL8139: RECEIVE_OK");
+        while (io_read_8(COMMAND) & BUFFER_EMPTY) == 0 {
+            receive_packets();
+        }
+	}
+    else if (status & RECEIVE_ERROR) != 0 {
+        println!("RTL8139: RECEIVE_ERROR");
+	}
+    else if (status & TRANSMIT_OK) != 0 {
+		// Sent
+        println!("RTL8139: TRANSMIT_OK");
+	}
+    else if (status & TRANSMIT_ERROR) != 0 {
+        println!("RTL8139: TRANSMIT_ERROR");
+	}
+}
+
+pub fn send_packet(buffer_virt_addr: VirtAddr, len: u32) {
     loop{
         unsafe {
             let own_status = io_read_32(TRANSMIT_STATUS + (4 * TRANSMIT_DESCRIPTOR));
@@ -235,7 +249,7 @@ fn set_transmit_status(size: u32) {
     }
 }
 
-pub fn rtl_receive_packet() {
+pub fn receive_packets() {
 
     unsafe {println!("{:?}", &RECEIVE_BUFFER[0 .. 30]);}
 

@@ -61,13 +61,10 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     }
     */
     
-    
     rtl8139::init();
     for _ in 0..5 {
         ethernet::send_empty_frame();
     }
-
-    ethernet::wait_for_receive();
 
     #[cfg(test)]
     test_main();

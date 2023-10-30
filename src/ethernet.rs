@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use core::mem::{size_of, transmute};
-use crate::rtl8139::{self, rtl_receive_packet};
+use crate::rtl8139;
 use alloc::vec::Vec;
 use x86_64::VirtAddr;
 
@@ -20,7 +20,7 @@ impl EthernetFrame {
     }
 }
 
-fn eth_send_packet(dst_mac: [u8; 6], protocol: u16, payload: Vec<u8>) {
+fn send_frame(dst_mac: [u8; 6], protocol: u16, payload: Vec<u8>) {
     const LEN: usize = size_of::<EthernetFrame>();
 
     let src_mac = rtl8139::get_mac_address();
@@ -31,16 +31,12 @@ fn eth_send_packet(dst_mac: [u8; 6], protocol: u16, payload: Vec<u8>) {
     };
     let frame_virt_addr = VirtAddr::from_ptr(&buffer);
     
-    rtl8139::rtl_send_packet(frame_virt_addr, LEN as u32)
+    rtl8139::send_packet(frame_virt_addr, LEN as u32)
 }
 
 pub fn send_empty_frame() {
     let dst_mac: [u8; 6] = [0xff; 6];
     let protocol = 0x0800; // IP-Ethernet-type
     let payload = Vec::new();
-    eth_send_packet(dst_mac, protocol, payload);
-}
-
-pub fn wait_for_receive() {
-    rtl_receive_packet()
+    send_frame(dst_mac, protocol, payload);
 }

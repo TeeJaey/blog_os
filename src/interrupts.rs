@@ -5,14 +5,22 @@ use pic8259::ChainedPics;
 use spin;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
-pub const PIC_1_OFFSET: u8 = 32;
-pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
+pub const PIC_1_OFFSET: u8 = 0x20;
+pub const PIC_2_OFFSET: u8 = 0x28;
+
+
+// static PIC_1_COMMAND_PORT: Mutex<Port<u32>> = Mutex::new(Port::new(0x0020));
+// static PIC_1_DATA_PORT: Mutex<Port<u32>> = Mutex::new(Port::new(0x0021));
+// static PIC_2_COMMAND_PORT: Mutex<Port<u32>> = Mutex::new(Port::new(0x00A0));
+// static PIC_2_DATA_PORT: Mutex<Port<u32>> = Mutex::new(Port::new(0x00A1));
+
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
     Keyboard,
+    RTL8139 = PIC_2_OFFSET + 3,
 }
 
 impl InterruptIndex {
@@ -40,6 +48,7 @@ lazy_static! {
         }
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
+        idt[InterruptIndex::RTL8139.as_usize()].set_handler_fn(rtl8139_interrupt_handler);
         idt
     };
 }
@@ -90,6 +99,16 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+    }
+}
+
+extern "x86-interrupt" fn rtl8139_interrupt_handler(_stack_frame: InterruptStackFrame) {    
+    use crate::rtl8139;
+    rtl8139::handle_interrupt();
+    
+    unsafe {
+        PICS.lock()
+            .notify_end_of_interrupt(InterruptIndex::RTL8139.as_u8());
     }
 }
 

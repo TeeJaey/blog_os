@@ -23,7 +23,13 @@ pub mod ethernet;
 pub fn init() {
     gdt::init();
     interrupts::init_idt();
-    unsafe { interrupts::PICS.lock().initialize() };
+    unsafe {
+        let mut pics = interrupts::PICS.lock();
+        let mut masks = pics.read_masks();
+        masks[1] = masks[1] & 0xF7;
+        pics.write_masks(masks[0],masks[1]);
+        pics.initialize() 
+    };
     x86_64::instructions::interrupts::enable();
 }
 
