@@ -2,13 +2,14 @@
 
 use crate::{
     println,
-    pci, memory, interrupts
+    pci, memory
 };
 use alloc::vec::Vec;
 use x86_64::{
     instructions::port::Port,
     VirtAddr
 };
+
 use spin::Mutex;
 use lazy_static::lazy_static;
 
@@ -69,21 +70,22 @@ const TRANSMIT_STATUS_ABORT: u32 = 0x40000000;
 const CARRIER_SENSE_LOST: u32 = 0x80000000;
 
 // ReceiveStatus
-const OK: u32 = 0x0001;
-const FRAME_ALIGNMENT_ERROR: u32 = 0x0002;
-const CHECKSUM_ERROR: u32 = 0x0004;
-const LONG_PACKET: u32 = 0x0008;
-const RUNT_PACKET: u32 = 0x0010;
-const INVALID_SYMBOL: u32 = 0x0020;
-const BROADCAST: u32 = 0x2000;
-const PHYSICAL_ADDRESS: u32 = 0x4000;
-const MULTICAST: u32 = 0x8000;
+const ROK: u16 = 0x0001;
+const FRAME_ALIGNMENT_ERROR: u16 = 0x0002;
+const CHECKSUM_ERROR: u16 = 0x0004;
+const LONG_PACKET: u16 = 0x0008;
+const RUNT_PACKET: u16 = 0x0010;
+const INVALID_SYMBOL: u16 = 0x0020;
+const BROADCAST: u16 = 0x2000;
+const PHYSICAL_ADDRESS: u16 = 0x4000;
+const MULTICAST: u16 = 0x8000;
 
 const RTL8139_VENDOR_ID: u16 = 0x10EC;
 const RTL8139_DEVICE_ID: u16 = 0x8139;
 const BUFFER_SIZE: u32 = 8 * 1024 + 16 + 1500;
 const TRANSMIT_DESCRIPTOR_COUNT: u8 = 4;
 
+static mut RECEIVE_INDEX: u16 = 0;
 static mut RECEIVE_BUFFER: [u8; BUFFER_SIZE as usize] = [0; BUFFER_SIZE as usize];
 static mut TRANSMIT_DESCRIPTOR: u8 = 0;
 
@@ -172,7 +174,6 @@ pub fn init() {
             // println!("RECEIVE_BUFFER_START: {}", io_read_32(RB_START));
             io_write_32(RECEIVE_CONFIGURATION, WRAP | ACCEPT_PHYSICAL_MATCH | ACCEPT_BROADCAST | LENGTH_8K);
             // println!("RECEIVE_CONFIGURATION: {}", io_read_32(RECEIVE_CONFIGURATION));
-            println!("{:?}", &RECEIVE_BUFFER[0 .. 30]);
         }
     }
 }
@@ -250,9 +251,22 @@ fn set_transmit_status(size: u32) {
 }
 
 pub fn receive_packets() {
-
-    unsafe {println!("{:?}", &RECEIVE_BUFFER[0 .. 30]);}
-
+    let header: u16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 1] as u16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize] as u16)};
+    if (header & ROK) != 0 {
+        let length: u16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 3] as u16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize + 2] as u16)};
+        let payload: Vec<u8> = Vec::from(unsafe {&RECEIVE_BUFFER[RECEIVE_INDEX as usize + 4..RECEIVE_INDEX as usize + (length as usize) + 4]});
+        println!("PACKET PAYLOAD: {:?}", payload);
+        
+        unsafe {
+            RECEIVE_INDEX += length + 4;
+            RECEIVE_INDEX = (RECEIVE_INDEX + 3) & !0x3;
+            RECEIVE_INDEX %= 0x2000;
+            if RECEIVE_INDEX < 0x10 {
+                println!("RECEIVE_INDEX < 16")
+            }
+            io_write_16(CURRENT_READ_ADDRESS, RECEIVE_INDEX - 0x10);
+        }
+    }
 }
 
 fn io_read_8(offset: u8) -> u8 {
