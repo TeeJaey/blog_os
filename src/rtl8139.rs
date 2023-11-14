@@ -254,16 +254,15 @@ pub fn receive_packets() {
     let header: u16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 1] as u16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize] as u16)};
     if (header & ROK) != 0 {
         let length: u16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 3] as u16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize + 2] as u16)};
+        println!("PACKET LENGTH: {:?} (including 4 CRC)", length);
         let payload: Vec<u8> = Vec::from(unsafe {&RECEIVE_BUFFER[RECEIVE_INDEX as usize + 4..RECEIVE_INDEX as usize + (length as usize) + 4]});
         println!("PACKET PAYLOAD: {:?}", payload);
         
         unsafe {
+            println!("CURRENT RECEIVE_INDEX: {}", RECEIVE_INDEX);
             RECEIVE_INDEX += length + 4;
             RECEIVE_INDEX = (RECEIVE_INDEX + 3) & !0x3;
             RECEIVE_INDEX %= 0x2000;
-            if RECEIVE_INDEX < 0x10 {
-                println!("RECEIVE_INDEX < 16")
-            }
             io_write_16(CURRENT_READ_ADDRESS, RECEIVE_INDEX - 0x10);
         }
     }
