@@ -11,7 +11,6 @@ use x86_64::{
 };
 
 use spin::Mutex;
-use lazy_static::lazy_static;
 
 // Register
 const ID0: u8 = 0x00;
@@ -88,41 +87,7 @@ const TRANSMIT_DESCRIPTOR_COUNT: u8 = 4;
 static mut RECEIVE_INDEX: u16 = 0;
 static mut RECEIVE_BUFFER: [u8; BUFFER_SIZE as usize] = [0; BUFFER_SIZE as usize];
 static mut TRANSMIT_DESCRIPTOR: u8 = 0;
-
-lazy_static! {
-    static ref RTL8139: Mutex<Rtl8139Info> = Mutex::new(Rtl8139Info::default());
-}
-
-#[derive(Debug)]
-pub struct Rtl8139Info {
-    io_addr: u16,
-    mac_addr: [u8; 6],
-    int_line: u8,
-}
-
-impl Default for Rtl8139Info {
-    fn default() -> Self {
-        Self {  io_addr: 0,
-                mac_addr: [00,00,00,00,00,00],
-                int_line: 0,
-        }
-    }
-}
-
-impl Rtl8139Info {
-    fn new(mac_addr: [u8; 6], io_addr: u16, int_line: u8) -> Self {
-        Self {mac_addr, io_addr, int_line}
-    }
-    fn io_addr(&self) -> u16 {
-        self.io_addr
-    }
-    fn mac_addr(&self) -> [u8; 6] {
-        self.mac_addr
-    }
-    fn int_line(&self) -> u8 {
-        self.int_line
-    }
-}
+static mut IO_BASE_ADDR: u16 = 0;
 
 pub fn init() {
     pci::get_pci_buses();
@@ -143,11 +108,7 @@ pub fn init() {
         rtl8139_dev.pci_set_command_register_bit(pci::BUS_MASTER);
         rtl8139_dev.pci_set_command_register_bit(pci::IO_SPACE);
 
-        let ioaddr= rtl8139_dev.determine_iobase(0).unwrap() as u16;
-        RTL8139.lock().io_addr = ioaddr;
-
-        RTL8139.lock().mac_addr = get_mac_address();
-        RTL8139.lock().int_line = rtl8139_dev.int_line;
+        unsafe { IO_BASE_ADDR = rtl8139_dev.determine_iobase(0).unwrap() as u16; }
         
         println!("Powering on / Waking up RTL8139");
         io_write_8(CONFIG_1, 0x0);
@@ -269,34 +230,34 @@ pub fn receive_packets() {
 }
 
 fn io_read_8(offset: u8) -> u8 {
-    let io_port: Mutex<Port<u8>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
+    let io_port: Mutex<Port<u8>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     let res = unsafe{io_port.lock().read()};
     res
 }
 
 fn io_read_16(offset: u8) -> u16 {
-    let io_port: Mutex<Port<u16>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
+    let io_port: Mutex<Port<u16>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     let res = unsafe{io_port.lock().read()};
     res
 }
 
 fn io_read_32(offset: u8) -> u32 {
-    let io_port: Mutex<Port<u32>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
+    let io_port: Mutex<Port<u32>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     let res = unsafe{io_port.lock().read()};
     res
 }
 
 fn io_write_8(offset: u8, value: u8) {
-    let io_port: Mutex<Port<u8>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
+    let io_port: Mutex<Port<u8>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     unsafe{io_port.lock().write(value);}
 }
 
 fn io_write_16(offset: u8, value: u16) {
-    let io_port: Mutex<Port<u16>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
+    let io_port: Mutex<Port<u16>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     unsafe{io_port.lock().write(value);}
 }
 
 fn io_write_32(offset: u8, value: u32) {
-    let io_port: Mutex<Port<u32>> = Mutex::new(Port::new(RTL8139.lock().io_addr + offset as u16));
+    let io_port: Mutex<Port<u32>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     unsafe{io_port.lock().write(value);}
 }
