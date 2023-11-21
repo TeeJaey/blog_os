@@ -122,6 +122,7 @@ pub fn get_pci_device_id(vendor: u16, device: u16) -> Option<&'static PciDevice>
                 }
             }
         }
+    println!("Couldn't find PCI-device with VENDOR_ID: {} and DEVICE_ID: {}", vendor, device);
     None
 }
 
@@ -206,7 +207,7 @@ fn scan_pci() -> Vec<PciBus> {
         }
     }
 
-    buses   
+    buses 
 }
 
 
