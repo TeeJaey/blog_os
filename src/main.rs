@@ -31,18 +31,19 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             BootInfoFrameAllocator
         },
         rtl8139,
-        ethernet
     };
     use x86_64::VirtAddr;
 
     println!("Hello World{}", "!");
-    blog_os::init();
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+
+    rtl8139::init();
+    blog_os::init();
 
     /* 
     let addresses = [
@@ -60,11 +61,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         println!("{:?} -> {:?}", virt, phys);
     }
     */
-    
-    rtl8139::init();
-    for _ in 0..5 {
-        ethernet::send_empty_frame();
-    }
 
     #[cfg(test)]
     test_main();
