@@ -48,12 +48,15 @@ features = ["alloc"]
 # The command invoked with the created bootimage (the "{}" will be replaced
 # with the path to the bootable disk image)
 # Applies to `bootimage run` and `bootimage runner`
-run-command = ["sudo", "qemu-system-x86_64", "-drive", "format=raw,file={}"]
+
+run-command = ["qemu-system-x86_64", "-drive", "format=raw,file={}"]
+#run-command = ["sudo", "qemu-system-x86_64", "-drive", "format=raw,file={}"]
 
 # Additional arguments passed to the run command for non-test executables
 # Applies to `bootimage run` and `bootimage runner`
 run-args = [
-    "-netdev", "tap,id=eth0,ifname=tap0,script=no,downscript=no",
+    "-netdev", "user,id=eth0,hostfwd=udp::8822-:8822",
+    #"-netdev", "tap,id=eth0,ifname=tap0,script=no,downscript=no",
     "-device", "rtl8139,netdev=eth0,mac=00:11:22:33:44:55",
     "-object", "filter-dump,id=filter1,netdev=eth0,file=eth0.dat"
 ]
