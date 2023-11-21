@@ -1,4 +1,4 @@
-use crate::{print, println};
+use crate::{print, println, ethernet};
 use conquer_once::spin::OnceCell;
 use core::{
     pin::Pin,
@@ -9,7 +9,7 @@ use futures_util::{
     stream::{Stream, StreamExt},
     task::AtomicWaker,
 };
-use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1, KeyCode};
 
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static WAKER: AtomicWaker = AtomicWaker::new();
@@ -75,7 +75,12 @@ pub async fn print_keypresses() {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
                     DecodedKey::Unicode(character) => print!("{}", character),
-                    DecodedKey::RawKey(key) => print!("{:?}", key),
+                    DecodedKey::RawKey(key) => 
+                        if key == KeyCode::ArrowRight {
+                            ethernet::send_empty_frame();
+                        } else {
+                            print!("{:?}", key);
+                        },
                 }
             }
         }
