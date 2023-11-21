@@ -2,7 +2,8 @@
 
 use crate::{
     println,
-    pci, memory
+    pci,
+    memory, interrupts,
 };
 use alloc::vec::Vec;
 use x86_64::{
@@ -84,12 +85,13 @@ const RTL8139_DEVICE_ID: u16 = 0x8139;
 const BUFFER_SIZE: u32 = 8 * 1024 + 16 + 1500;
 const TRANSMIT_DESCRIPTOR_COUNT: u8 = 4;
 
-static mut RECEIVE_INDEX: u16 = 0;
 static mut RECEIVE_BUFFER: [u8; BUFFER_SIZE as usize] = [0; BUFFER_SIZE as usize];
 static mut TRANSMIT_DESCRIPTOR: u8 = 0;
 static mut IO_BASE_ADDR: u16 = 0;
+static mut RECEIVE_INDEX: i16 = 0;
 
 pub fn init() {
+    println!("Beginning initialisation of RTL8139!");
     pci::get_pci_buses();
     
     // let bus_list = pci::get_pci_buses();
@@ -110,6 +112,8 @@ pub fn init() {
 
         unsafe { IO_BASE_ADDR = rtl8139_dev.determine_iobase(0).unwrap() as u16; }
         
+        interrupts::regiser_interrupt("RTL8139", rtl8139_dev.int_line);
+
         println!("Powering on / Waking up RTL8139");
         io_write_8(CONFIG_1, 0x0);
         
@@ -130,12 +134,12 @@ pub fn init() {
             let rxbuf_virt = VirtAddr::new_unsafe(RECEIVE_BUFFER.as_ptr() as u64);
             let virt_to_phys = memory::translate_addr(rxbuf_virt);
             let rxbuf_phys = virt_to_phys.unwrap().as_u64();
-
             io_write_32(RB_START, rxbuf_phys as u32);
-            // println!("RECEIVE_BUFFER_START: {}", io_read_32(RB_START));
             io_write_32(RECEIVE_CONFIGURATION, WRAP | ACCEPT_PHYSICAL_MATCH | ACCEPT_BROADCAST | LENGTH_8K);
-            // println!("RECEIVE_CONFIGURATION: {}", io_read_32(RECEIVE_CONFIGURATION));
         }
+        println!("RTL8139 init complete...");
+    } else {
+        println!("Aborting RTL8139 initialisation...")
     }
 }
 
@@ -174,11 +178,15 @@ pub fn handle_interrupt() {
 }
 
 pub fn send_packet(buffer_virt_addr: VirtAddr, len: u32) {
+    println!("sending packet");
+    println!("buffer virt addr: {:?}", buffer_virt_addr);
+    println!("buffer len: {:x}", len);
+
     loop{
         unsafe {
-            let own_status = io_read_32(TRANSMIT_STATUS + (4 * TRANSMIT_DESCRIPTOR));
-        
-            if (own_status & OWN) != 0 {
+            let status = io_read_32(TRANSMIT_STATUS + (4 * TRANSMIT_DESCRIPTOR));
+            println!("transmit status register of descriptor {}: {:x?}", TRANSMIT_DESCRIPTOR, status);
+            if (status & OWN) != 0 {
                 break;
             }
         }
@@ -187,6 +195,8 @@ pub fn send_packet(buffer_virt_addr: VirtAddr, len: u32) {
     let virt_to_phys = unsafe {memory::translate_addr(buffer_virt_addr)};
     let buffer_phys_addr = virt_to_phys.unwrap().as_u64() as u32;
     
+    println!("buffer phys addr: {:x?}", buffer_phys_addr);
+
     set_transmit_buffer(buffer_phys_addr); 
     set_transmit_status(len);
 
@@ -213,18 +223,20 @@ fn set_transmit_status(size: u32) {
 
 pub fn receive_packets() {
     let header: u16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 1] as u16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize] as u16)};
+    println!("header: {:x}", header);
     if (header & ROK) != 0 {
-        let length: u16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 3] as u16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize + 2] as u16)};
+        let length: i16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 3] as i16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize + 2] as i16)};
         println!("PACKET LENGTH: {:?} (including 4 CRC)", length);
-        let payload: Vec<u8> = Vec::from(unsafe {&RECEIVE_BUFFER[RECEIVE_INDEX as usize + 4..RECEIVE_INDEX as usize + (length as usize) + 4]});
-        println!("PACKET PAYLOAD: {:?}", payload);
+        let payload: Vec<u8> = Vec::from(unsafe {&RECEIVE_BUFFER[RECEIVE_INDEX as usize + 4..RECEIVE_INDEX as usize + (length as usize)]});
+        println!("PACKET PAYLOAD: {:x?}", payload);
         
         unsafe {
-            println!("CURRENT RECEIVE_INDEX: {}", RECEIVE_INDEX);
+            println!("PRE-ADJUST RECEIVE_INDEX: {}", RECEIVE_INDEX);
             RECEIVE_INDEX += length + 4;
             RECEIVE_INDEX = (RECEIVE_INDEX + 3) & !0x3;
             RECEIVE_INDEX %= 0x2000;
-            io_write_16(CURRENT_READ_ADDRESS, RECEIVE_INDEX - 0x10);
+            io_write_16(CURRENT_READ_ADDRESS, (RECEIVE_INDEX - 0x10) as u16);
+            println!("POST-ADJUST RECEIVE_INDEX: {}", RECEIVE_INDEX);
         }
     }
 }
