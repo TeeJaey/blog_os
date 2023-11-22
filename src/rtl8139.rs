@@ -180,7 +180,7 @@ pub fn handle_interrupt() {
 pub fn send_packet(buffer_virt_addr: VirtAddr, len: u32) {
     println!("sending packet");
     println!("buffer virt addr: {:?}", buffer_virt_addr);
-    println!("buffer len: {:x}", len);
+    println!("buffer len: {}", len);
 
     loop{
         unsafe {
