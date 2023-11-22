@@ -29,8 +29,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         memory::{
             self, 
             BootInfoFrameAllocator
-        },
-        rtl8139,
+        }
     };
     use x86_64::VirtAddr;
 
@@ -42,7 +41,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    rtl8139::init();
     blog_os::init();
 
     /* 

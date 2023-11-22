@@ -22,6 +22,7 @@ pub mod ethernet;
 
 pub fn init() {
     gdt::init();
+    rtl8139::init();
     interrupts::init_idt();
     unsafe {
         let mut pics = interrupts::PICS.lock();
