@@ -108,6 +108,7 @@ pub fn init() {
         let rtl8139_dev = opt_rtl8139.unwrap();
 
         rtl8139_dev.pci_set_command_register_bit(pci::BUS_MASTER);
+        rtl8139_dev.pci_set_command_register_bit(pci::INTERRUPT_DISABLE);
         rtl8139_dev.pci_set_command_register_bit(pci::IO_SPACE);
 
         unsafe { IO_BASE_ADDR = rtl8139_dev.determine_iobase(0).unwrap() as u16; }

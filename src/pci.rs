@@ -57,12 +57,6 @@ pub const SERR_ENABLE: u16 = 0x0100;
 pub const FAST_BACK_TO_BACK: u16 = 0x0200;
 pub const INTERRUPT_DISABLE: u16 = 0x0400;
 
-#[repr(u8)]
-pub enum PciCapability {
-    Msi  = 0x05,
-    Msix = 0x11,
-}
-
 
 /// If a BAR's bits [2:1] equal this value, that BAR describes a 64-bit address.
 /// If not, that BAR describes a 32-bit address.
@@ -97,21 +91,6 @@ pub fn get_pci_buses() -> &'static Vec<PciBus> {
         PCI_BUSES.call_once(scan_pci)
 }
 
-/// Returns a reference to the `PciDevice` with the given bus, slot, func identifier.
-/// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
-pub fn get_pci_device_bsf(bus: u8, slot: u8, func: u8) -> Option<&'static PciDevice> {
-    for b in get_pci_buses() {
-        if b.bus_number == bus {
-            for d in &b.devices {
-                if d.slot == slot && d.func == func {
-                    return Some(d);
-                }
-            }
-        }
-    }
-    None
-}
-
 /// Returns a reference to the `PciDevice` with the given Vendor ID and Device ID.
 /// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
 pub fn get_pci_device_id(vendor: u16, device: u16) -> Option<&'static PciDevice> {
@@ -124,12 +103,6 @@ pub fn get_pci_device_id(vendor: u16, device: u16) -> Option<&'static PciDevice>
         }
     println!("Couldn't find PCI-device with VENDOR_ID: {} and DEVICE_ID: {}", vendor, device);
     None
-}
-
-/// Returns an iterator that iterates over all `PciDevice`s, in no particular guaranteed order. 
-/// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
-pub fn pci_device_iter() -> impl Iterator<Item = &'static PciDevice> {
-    get_pci_buses().iter().flat_map(|b| b.devices.iter())
 }
 
 /// A PCI bus, which contains a list of PCI devices on that bus.
@@ -297,59 +270,6 @@ impl PciLocation {
             println!("Bit already set!")
         }
     }
-
-    pub fn pci_show_header_register(&self, reg: u8) {
-        unsafe { 
-            PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(reg));
-        }
-        let tmp = Self::read_data_port(); 
-        println!("content in pci_header_register {:#x} of PCI-Device {}: {:#x}", reg, self, tmp);
-
-    }
-
-    /// Explores the PCI config space and returns address of requested capability, if present. 
-    /// PCI capabilities are stored as a linked list in the PCI config space, 
-    /// with each capability storing the pointer to the next capability right after its ID.
-    /// The function returns a None value if capabilities are not valid for this device 
-    /// or if the requested capability is not present. 
-    fn find_pci_capability(&self, pci_capability: PciCapability) -> Option<u8> {
-        let pci_capability = pci_capability as u8;
-        let status = self.pci_read_16(PCI_STATUS);
-
-        // capabilities are only valid if bit 4 of status register is set
-        const CAPABILITIES_VALID: u16 = 1 << 4;
-        if  status & CAPABILITIES_VALID != 0 {
-
-            // retrieve the capabilities pointer from the pci config space
-            let capabilities = self.pci_read_8(PCI_CAPABILITIES);
-            // debug!("capabilities pointer: {:#X}", capabilities);
-
-            // mask the bottom 2 bits of the capabilities pointer to find the address of the first capability
-            let mut cap_addr = capabilities & 0xFC;
-
-            // the last capability will have its next pointer equal to zero
-            let final_capability = 0;
-
-            // iterate through the linked list of capabilities until the requested capability is found or the list reaches its end
-            while cap_addr != final_capability {
-                // the capability header is a 16 bit value which contains the current capability ID and the pointer to the next capability
-                let cap_header = self.pci_read_16(cap_addr);
-
-                // the id is the lower byte of the header
-                let cap_id = (cap_header & 0xFF) as u8;
-                
-                if cap_id == pci_capability {
-                    println!("Found capability: {:#X} at {:#X}", pci_capability, cap_addr);
-                    return Some(cap_addr);
-                }
-
-                // find address of next capability which is the higher byte of the header
-                cap_addr = ((cap_header >> 8) & 0xFF) as u8;            
-            }
-        }
-        None
-    }
-
 }
 
 impl fmt::Display for PciLocation {
@@ -397,72 +317,6 @@ pub struct PciDevice {
 }
 
 impl PciDevice {
-    /// Returns the base address of the memory region specified by the given `BAR` 
-    /// (Base Address Register) for this PCI device. 
-    ///
-    /// # Argument
-    /// * `bar_index` must be between `0` and `5` inclusively, as each PCI device 
-    ///   can only have 6 BARs at the most.  
-    ///
-    /// Note that if the given `BAR` actually indicates it is part of a 64-bit address,
-    /// it will be used together with the BAR right above it (`bar + 1`), e.g., `BAR1:BAR0`.
-    /// If it is a 32-bit address, then only the given `BAR` will be accessed.
-    ///
-    /// TODO: currently we assume the BAR represents a memory space (memory mapped I/O) 
-    ///       rather than I/O space like Port I/O. Obviously, this is not always the case.
-    ///       Instead, we should return an enum specifying which kind of memory space the calculated base address is.
-    pub fn determine_mem_base(&self, bar_index: usize) -> Result<PhysAddr, &'static str> {
-        let mut bar = if let Some(bar_value) = self.bars.get(bar_index) {
-            *bar_value
-        } else {
-            return Err("BAR index must be between 0 and 5 inclusive");
-        };
-
-        // Check bits [2:1] of the bar to determine address length (64-bit or 32-bit)
-        let mem_base = if bar.get_bits(1..3) == BAR_ADDRESS_IS_64_BIT { 
-            // Here: this BAR is the lower 32-bit part of a 64-bit address, 
-            // so we need to access the next highest BAR to get the address's upper 32 bits.
-            let next_bar = *self.bars.get(bar_index + 1).ok_or("next highest BAR index is out of range")?;
-            // Clear the bottom 4 bits because it's a 16-byte aligned address
-            PhysAddr::new(*bar.set_bits(0..4, 0) as u64 | ((next_bar as u64) << 32))
-        } else {
-            // Here: this BAR is the lower 32-bit part of a 64-bit address, 
-            // so we need to access the next highest BAR to get the address's upper 32 bits.
-            // Also, clear the bottom 4 bits because it's a 16-byte aligned address.
-            PhysAddr::new(*bar.set_bits(0..4, 0) as u64)
-        };  
-        println!("mem_base of PCI-Device {} for BAR {}: {:#x}", self.location, bar_index, mem_base);
-        Ok(mem_base)
-    }
-
-    /// Returns the size in bytes of the memory region specified by the given `BAR` 
-    /// (Base Address Register) for this PCI device.
-    ///
-    /// # Argument
-    /// * `bar_index` must be between `0` and `5` inclusively, as each PCI device 
-    /// can only have 6 BARs at the most. 
-    ///
-    pub fn determine_mem_size(&self, bar_index: usize) -> u32 {
-        assert!(bar_index < 6);
-        // Here's what we do: 
-        // (1) Write all `1`s to the specified BAR
-        // (2) Read that BAR value again
-        // (3) Mask the info bits (bits [3:0]) of the BAR value read in Step 2
-        // (4) Bitwise "not" (negate) that value, then add 1.
-        //     The resulting value is the size of that BAR's memory region.
-        // (5) Restore the original value to that BAR
-        let bar_offset = PCI_BAR0 + (bar_index as u8 * 4);
-        let original_value = self.bars[bar_index];
-
-        self.pci_write(bar_offset, 0xFFFF_FFFF);          // Step 1
-        let mut mem_size = self.pci_read_32(bar_offset);  // Step 2
-        mem_size.set_bits(0..4, 0);                       // Step 3
-        mem_size = !(mem_size);                           // Step 4
-        mem_size += 1;                                    // Step 4
-        self.pci_write(bar_offset, original_value);       // Step 5
-        mem_size
-    }
-
     pub fn determine_iobase(&self, bar_index: usize) -> Result<u32, &'static str> {
         let bar = if let Some(bar_value) = self.bars.get(bar_index) {
             *bar_value
@@ -474,7 +328,6 @@ impl PciDevice {
         println!("iobase of PCI-Device {} for BAR {}: {:#x}", self.location, bar_index, iobase);
         Ok(iobase)
     }
-
 }
 
 impl Deref for PciDevice {
