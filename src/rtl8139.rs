@@ -92,15 +92,6 @@ static mut RECEIVE_INDEX: i16 = 0;
 
 pub fn init() {
     println!("Beginning initialisation of RTL8139!");
-    pci::get_pci_buses();
-    
-    // let bus_list = pci::get_pci_buses();
-    // for bus in bus_list {
-    //     let dev_list = &bus.devices;
-    //     for dev in dev_list {
-    //         println!("location:{} VID:{} DID:{}", dev.location, dev.vendor_id, dev.device_id);
-    //     }
-    // }
 
     let opt_rtl8139 = pci::get_pci_device_id(RTL8139_VENDOR_ID, RTL8139_DEVICE_ID);
     
