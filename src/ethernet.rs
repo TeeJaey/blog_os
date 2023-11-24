@@ -23,7 +23,6 @@ impl EthernetHeader {
     }
 }
 
-
 #[derive(Debug)]
 #[repr(C)]
 pub struct EthernetFrame {

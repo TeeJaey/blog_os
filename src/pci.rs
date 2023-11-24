@@ -9,8 +9,7 @@ use core::{
 };
 use alloc::vec::Vec;
 use spin::{Once, Mutex};
-use x86_64::{PhysAddr, instructions::port::Port};
-use bit_field::BitField;
+use x86_64::instructions::port::Port;
 use lazy_static::lazy_static;
 
 // The below constants define the PCI configuration space. 
