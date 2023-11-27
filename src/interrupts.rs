@@ -1,4 +1,4 @@
-use crate::{gdt, hlt_loop, print, println};
+use crate::{gdt, hlt_loop, println};
 use alloc::{vec::Vec, string::String};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
@@ -7,26 +7,6 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, Pag
 
 pub const PIC_1_OFFSET: u8 = 0x20;
 pub const PIC_2_OFFSET: u8 = 0x28;
-
-static mut COUNT_DOWN: u32 = 0;
-
-// #[derive(Debug, Clone, Copy)]
-// #[repr(u8)]
-// pub enum InterruptIndex {
-//     Timer = PIC_1_OFFSET,
-//     Keyboard,
-//     RTL8139 = PIC_1_OFFSET + 11,
-// }
-
-// impl InterruptIndex {
-//     fn as_u8(self) -> u8 {
-//         self as u8
-//     }
-
-//     fn as_usize(self) -> usize {
-//         usize::from(self.as_u8())
-//     }
-// }
 
 #[derive(Debug, Clone)]
 struct MyInterruptIndex {
@@ -83,17 +63,6 @@ lazy_static! {
 
 pub fn init_idt() {
     IDT.load();
-}
-
-pub unsafe fn sleep(time: u32) {
-    COUNT_DOWN = time;
-    println!("sleeping for {}", COUNT_DOWN);
-    while COUNT_DOWN > 0 {
-        print!(".");
-        COUNT_DOWN -= 1;
-        x86_64::instructions::hlt();
-    }
-    println!(".");
 }
 
 pub fn regiser_interrupt(name: &str, line: u8) {
