@@ -1,10 +1,10 @@
 from scapy.all import Ether, sendp
-import netifaces
+import psutil
 
 def get_interfaces():
     interfaces = []
     print("Following Network Interfaces available:")
-    for i, iface in enumerate(netifaces.interfaces(), start=1):
+    for i, iface in enumerate(psutil.net_if_addrs().keys(), start=1):
         print(f"{i}. {iface}")
         interfaces.append(iface)
     return interfaces
@@ -23,7 +23,7 @@ def choose_interface(interfaces):
     
 def get_mac_address(interface):
     # get the mac address of the interface
-    mac_address = netifaces.ifaddresses(interface)[netifaces.AF_LINK][0]['addr']
+    mac_address = psutil.net_if_addrs()[interface][-1].address
     return mac_address
 
 interfaces = get_interfaces()
