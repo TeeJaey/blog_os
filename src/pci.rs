@@ -56,6 +56,10 @@ pub const SERR_ENABLE: u16 = 0x0100;
 pub const FAST_BACK_TO_BACK: u16 = 0x0200;
 pub const INTERRUPT_DISABLE: u16 = 0x0400;
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/master
 /// If a BAR's bits [2:1] equal this value, that BAR describes a 64-bit address.
 /// If not, that BAR describes a 32-bit address.
 const BAR_ADDRESS_IS_64_BIT: u32 = 2;
@@ -89,6 +93,7 @@ pub fn get_pci_buses() -> &'static Vec<PciBus> {
         PCI_BUSES.call_once(scan_pci)
 }
 
+<<<<<<< HEAD
 /// Returns a reference to the `PciDevice` with the given bus, slot, func identifier.
 /// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
 pub fn get_pci_device_bsf(bus: u8, slot: u8, func: u8) -> Option<&'static PciDevice> {
@@ -97,18 +102,14 @@ pub fn get_pci_device_bsf(bus: u8, slot: u8, func: u8) -> Option<&'static PciDev
     })
 }
 
+=======
+>>>>>>> origin/master
 /// Returns a reference to the `PciDevice` with the given Vendor ID and Device ID.
 /// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
 pub fn get_pci_device_id(ven_id: u16, dev_id: u16) -> Option<&'static PciDevice> {
     pci_device_iter().find(|device| {
         device.vendor_id == ven_id && device.device_id == dev_id
     })
-}
-
-/// Returns an iterator that iterates over all `PciDevice`s, in no particular guaranteed order. 
-/// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
-pub fn pci_device_iter() -> impl Iterator<Item = &'static PciDevice> {
-    get_pci_buses().iter().flat_map(|b| b.devices.iter())
 }
 
 /// A PCI bus, which contains a list of PCI devices on that bus.
