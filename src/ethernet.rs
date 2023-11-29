@@ -23,7 +23,6 @@ impl EthernetHeader {
     }
 }
 
-
 #[derive(Debug)]
 #[repr(C)]
 pub struct EthernetFrame {
@@ -53,9 +52,7 @@ impl EthernetFrame {
 }
 
 fn send_frame(frame: EthernetFrame) {
-
     let mut buffer: Vec<u8> = Vec::with_capacity(size_of_val(&frame));
-
     buffer.append(&mut frame.to_bytes());
 
     let buffer_virt_addr = VirtAddr::new(buffer.as_mut_ptr() as u64);
@@ -67,25 +64,9 @@ pub fn send_empty_frame() {
     let header = EthernetHeader::new(
         [0xff; 6],
         rtl8139::get_mac_address(),
-        0x1122);
+        0x1234);
     let payload = Vec::new();
     let empty_frame = EthernetFrame::new(header, payload);
 
     send_frame(empty_frame);
 }
-
-    // let payload: Vec<u8>  = Vec::from([
-        //     0x45,
-        //     0x00,
-        //     0x00, 0x00,
-        //     0x81, 0x39,
-        //     0x00, 0x00,
-        //     0x80,
-        //     0x11,
-        //     0x00, 0x00,
-        //     0x00, 0x00, 0x00 , 0x00,
-        //     0xff, 0xff, 0xff, 0xff,
-        //     0x22, 0x76,
-        //     0x22, 0x76,
-        //     0x00, 0x06
-        // ]);

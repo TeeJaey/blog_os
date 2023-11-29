@@ -22,7 +22,7 @@ pub mod ethernet;
 
 pub fn init() {
     gdt::init();
-    rtl8139::init();
+    //rtl8139::init();
     interrupts::init_idt();
     unsafe {
         let mut pics = interrupts::PICS.lock();
@@ -92,7 +92,7 @@ use bootloader::{entry_point, BootInfo};
 #[cfg(test)]
 entry_point!(test_kernel_main);
 
-/// Entry point for `cargo xtest`
+/// Entry point for `cargo test`
 #[cfg(test)]
 fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
     init();

@@ -43,23 +43,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     blog_os::init();
 
-    /* 
-    let addresses = [
-        // the identity-mapped vga buffer page
-         0xb8000,
-        // some code page
-        0x201008,
-        // some stack page
-        0x0100_0020_1a10
-    ];
-
-    for &address in &addresses {
-        let virt = VirtAddr::new(address);
-        let phys = unsafe { translate_addr(virt) };
-        println!("{:?} -> {:?}", virt, phys);
-    }
-    */
-
     #[cfg(test)]
     test_main();
 

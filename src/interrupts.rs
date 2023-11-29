@@ -10,24 +10,6 @@ pub const PIC_2_OFFSET: u8 = 0x28;
 
 static mut COUNT_DOWN: u32 = 0;
 
-// #[derive(Debug, Clone, Copy)]
-// #[repr(u8)]
-// pub enum InterruptIndex {
-//     Timer = PIC_1_OFFSET,
-//     Keyboard,
-//     RTL8139 = PIC_1_OFFSET + 11,
-// }
-
-// impl InterruptIndex {
-//     fn as_u8(self) -> u8 {
-//         self as u8
-//     }
-
-//     fn as_usize(self) -> usize {
-//         usize::from(self.as_u8())
-//     }
-// }
-
 #[derive(Debug, Clone)]
 struct MyInterruptIndex {
     table: Vec<(String, u8)>

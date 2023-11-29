@@ -100,30 +100,20 @@ pub fn get_pci_buses() -> &'static Vec<PciBus> {
 /// Returns a reference to the `PciDevice` with the given bus, slot, func identifier.
 /// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
 pub fn get_pci_device_bsf(bus: u8, slot: u8, func: u8) -> Option<&'static PciDevice> {
-    for b in get_pci_buses() {
-        if b.bus_number == bus {
-            for d in &b.devices {
-                if d.slot == slot && d.func == func {
-                    return Some(d);
-                }
-            }
-        }
-    }
-    None
+    pci_device_iter().find(|device| {
+        device.location.bus == bus &&
+        device.location.slot == slot &&
+        device.location.func == func
+    })
 }
 
 /// Returns a reference to the `PciDevice` with the given Vendor ID and Device ID.
 /// If the PCI bus hasn't been initialized, this initializes the PCI bus & scans it to enumerates devices.
-pub fn get_pci_device_id(vendor: u16, device: u16) -> Option<&'static PciDevice> {
-    for b in get_pci_buses() {
-        for d in &b.devices {
-            if d.vendor_id == vendor && d.device_id == device {
-                    return Some(d);
-                }
-            }
-        }
-    println!("Couldn't find PCI-device with VENDOR_ID: {} and DEVICE_ID: {}", vendor, device);
-    None
+pub fn get_pci_device_id(ven_id: u16, dev_id: u16) -> Option<&'static PciDevice> {
+    pci_device_iter().find(|device| {
+        device.vendor_id == ven_id &&
+        device.device_id == dev_id
+    })
 }
 
 /// Returns an iterator that iterates over all `PciDevice`s, in no particular guaranteed order. 
