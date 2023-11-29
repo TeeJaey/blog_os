@@ -58,7 +58,10 @@ lazy_static! {
         }
         idt[INDEX.lock().get("Timer").unwrap() as usize].set_handler_fn(timer_interrupt_handler);
         idt[INDEX.lock().get("Keyboard").unwrap() as usize].set_handler_fn(keyboard_interrupt_handler);
-        idt[INDEX.lock().get("RTL8139").unwrap() as usize].set_handler_fn(rtl8139_interrupt_handler);
+        let rtl8139 = INDEX.lock().get("RTL8139");
+        if rtl8139.is_some() {
+            idt[rtl8139.unwrap() as usize].set_handler_fn(rtl8139_interrupt_handler);
+        }
         idt
     };
 }
