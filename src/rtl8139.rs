@@ -92,15 +92,6 @@ static mut RECEIVE_INDEX: i16 = 0;
 
 pub fn init() {
     println!("Beginning initialisation of RTL8139!");
-    pci::get_pci_buses();
-    
-    // let bus_list = pci::get_pci_buses();
-    // for bus in bus_list {
-    //     let dev_list = &bus.devices;
-    //     for dev in dev_list {
-    //         println!("location:{} VID:{} DID:{}", dev.location, dev.vendor_id, dev.device_id);
-    //     }
-    // }
 
     let opt_rtl8139 = pci::get_pci_device_id(RTL8139_VENDOR_ID, RTL8139_DEVICE_ID);
     
@@ -108,6 +99,7 @@ pub fn init() {
         let rtl8139_dev = opt_rtl8139.unwrap();
 
         rtl8139_dev.pci_set_command_register_bit(pci::BUS_MASTER);
+        rtl8139_dev.pci_set_command_register_bit(pci::INTERRUPT_DISABLE);
         rtl8139_dev.pci_set_command_register_bit(pci::IO_SPACE);
 
         unsafe { IO_BASE_ADDR = rtl8139_dev.determine_iobase(0).unwrap() as u16; }

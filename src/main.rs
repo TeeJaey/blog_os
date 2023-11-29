@@ -6,59 +6,26 @@
 
 extern crate alloc;
 
-use blog_os::{
-    println,
-    task::{
-        executor::Executor, 
-        keyboard, 
-        Task
-    }
-};
-use bootloader::{
-    entry_point, 
-    BootInfo
-};
+use blog_os::println;
+use blog_os::task::{executor::Executor, keyboard, Task};
+use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 
 entry_point!(kernel_main);
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-
-    use blog_os::{
-        allocator,
-        memory::{
-            self, 
-            BootInfoFrameAllocator
-        }
-    };
+    use blog_os::allocator;
+    use blog_os::memory::{self, BootInfoFrameAllocator};
     use x86_64::VirtAddr;
 
     println!("Hello World{}", "!");
+    blog_os::init();
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
-
-    blog_os::init();
-
-    /* 
-    let addresses = [
-        // the identity-mapped vga buffer page
-         0xb8000,
-        // some code page
-        0x201008,
-        // some stack page
-        0x0100_0020_1a10
-    ];
-
-    for &address in &addresses {
-        let virt = VirtAddr::new(address);
-        let phys = unsafe { translate_addr(virt) };
-        println!("{:?} -> {:?}", virt, phys);
-    }
-    */
 
     #[cfg(test)]
     test_main();
