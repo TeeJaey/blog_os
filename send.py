@@ -34,7 +34,7 @@ print("Chosen interface: ", interface)
 # Ethernet frame details
 dst_mac = "ff:ff:ff:ff:ff:ff" # destination MAC address
 src_mac = get_mac_address(interface) # source MAC address
-ether_type = 0x1122          # EtherType
+ether_type = 0x1234 # EtherType
 
 try:
     num_frames = int(input("Please enter the number of frames you want to send: "))
