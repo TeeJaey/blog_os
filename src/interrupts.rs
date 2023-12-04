@@ -1,4 +1,4 @@
-use crate::{gdt, hlt_loop, print, println};
+use crate::{gdt, hlt_loop, println};
 use alloc::{vec::Vec, string::String};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
@@ -69,6 +69,10 @@ lazy_static! {
 pub fn init_idt() {
     IDT.load();
 }
+
+// simple sleep function, using hlt() over the given countdown time
+// ! do not call when an interrupt is already happening,
+// else you will cause a deadlock !
 
 pub unsafe fn sleep(time: u32) {
     COUNT_DOWN = time;

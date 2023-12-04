@@ -102,7 +102,7 @@ use bootloader::entry_point;
 #[cfg(test)]
 entry_point!(test_kernel_main);
 
-/// Entry point for `cargo test`
+/// Entry point for `cargo xtest`
 #[cfg(test)]
 fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
     init(_boot_info);
