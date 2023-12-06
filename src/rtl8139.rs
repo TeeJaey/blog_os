@@ -98,12 +98,11 @@ pub fn init() {
     if opt_rtl8139.is_some() {
         let rtl8139_dev = opt_rtl8139.unwrap();
 
+        unsafe { IO_BASE_ADDR = rtl8139_dev.determine_iobase(0).unwrap() as u16; }
+        interrupts::regiser_interrupt("RTL8139", rtl8139_dev.int_line);
+
         rtl8139_dev.pci_set_command_register_bit(pci::BUS_MASTER);
         rtl8139_dev.pci_set_command_register_bit(pci::IO_SPACE);
-
-        unsafe { IO_BASE_ADDR = rtl8139_dev.determine_iobase(0).unwrap() as u16; }
-        
-        interrupts::regiser_interrupt("RTL8139", rtl8139_dev.int_line);
 
         println!("Powering on / Waking up RTL8139");
         io_write_8(CONFIG_1, 0x0);

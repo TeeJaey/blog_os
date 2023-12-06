@@ -286,59 +286,6 @@ impl PciLocation {
             println!("Bit already set!")
         }
     }
-
-    pub fn pci_show_header_register(&self, reg: u8) {
-        unsafe { 
-            PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(reg));
-        }
-        let tmp = Self::read_data_port(); 
-        println!("content in pci_header_register {:#x} of PCI-Device {}: {:#x}", reg, self, tmp);
-
-    }
-
-    /// Explores the PCI config space and returns address of requested capability, if present. 
-    /// PCI capabilities are stored as a linked list in the PCI config space, 
-    /// with each capability storing the pointer to the next capability right after its ID.
-    /// The function returns a None value if capabilities are not valid for this device 
-    /// or if the requested capability is not present. 
-    fn find_pci_capability(&self, pci_capability: PciCapability) -> Option<u8> {
-        let pci_capability = pci_capability as u8;
-        let status = self.pci_read_16(PCI_STATUS);
-
-        // capabilities are only valid if bit 4 of status register is set
-        const CAPABILITIES_VALID: u16 = 1 << 4;
-        if  status & CAPABILITIES_VALID != 0 {
-
-            // retrieve the capabilities pointer from the pci config space
-            let capabilities = self.pci_read_8(PCI_CAPABILITIES);
-            // debug!("capabilities pointer: {:#X}", capabilities);
-
-            // mask the bottom 2 bits of the capabilities pointer to find the address of the first capability
-            let mut cap_addr = capabilities & 0xFC;
-
-            // the last capability will have its next pointer equal to zero
-            let final_capability = 0;
-
-            // iterate through the linked list of capabilities until the requested capability is found or the list reaches its end
-            while cap_addr != final_capability {
-                // the capability header is a 16 bit value which contains the current capability ID and the pointer to the next capability
-                let cap_header = self.pci_read_16(cap_addr);
-
-                // the id is the lower byte of the header
-                let cap_id = (cap_header & 0xFF) as u8;
-                
-                if cap_id == pci_capability {
-                    println!("Found capability: {:#X} at {:#X}", pci_capability, cap_addr);
-                    return Some(cap_addr);
-                }
-
-                // find address of next capability which is the higher byte of the header
-                cap_addr = ((cap_header >> 8) & 0xFF) as u8;            
-            }
-        }
-        None
-    }
-
 }
 
 impl fmt::Display for PciLocation {
