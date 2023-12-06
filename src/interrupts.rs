@@ -34,16 +34,18 @@ impl MyInterruptIndex {
     }
 
     pub fn get_pic_mask(&self, pic: u8) -> u8 {
-        let mut res = 0;
-        let mut line: u8;
+        let mut res = 0xFF;
         for pair in &self.table {
-            if (pic == 1) & (PIC_1_OFFSET <= pair.1) & (pair.1 < PIC_1_OFFSET + 8) {
-                line = pair.1 - PIC_1_OFFSET;
-            } else if (pic == 2) & (PIC_2_OFFSET <= pair.1) & (pair.1 < PIC_2_OFFSET + 8) {
-                line = pair.1 - PIC_2_OFFSET;
-            } else { panic!() }
-            res = res | (1 << line);
-        };
+            match pic {
+                1 => if PIC_1_OFFSET <= pair.1 && pair.1 < PIC_1_OFFSET + 8 {
+                    res = res & !(1 << (pair.1 - PIC_1_OFFSET))
+                },
+                2 => if PIC_2_OFFSET <= pair.1 && pair.1 < PIC_2_OFFSET + 8 {
+                    res = res & !(1 << (pair.1 - PIC_2_OFFSET))
+                },
+                _ => panic!(),
+            }
+        }
         res
     }
 }
