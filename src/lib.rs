@@ -37,9 +37,10 @@ pub fn init(boot_info: &'static BootInfo) {
     unsafe {
         let mut pics = interrupts::PICS.lock();
         let mut masks = pics.read_masks();
-        masks[1] = masks[1] & 0xF7;
+        masks[0] = masks[0] | interrupts::INDEX.lock().get_pic_mask(1);
+        masks[1] = masks[1] | interrupts::INDEX.lock().get_pic_mask(2);
         pics.write_masks(masks[0],masks[1]);
-        pics.initialize() 
+        pics.initialize()
     };
     x86_64::instructions::interrupts::enable();
 }

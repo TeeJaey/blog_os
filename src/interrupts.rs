@@ -11,7 +11,7 @@ pub const PIC_2_OFFSET: u8 = 0x28;
 static mut COUNT_DOWN: u32 = 0;
 
 #[derive(Debug, Clone)]
-struct MyInterruptIndex {
+pub struct MyInterruptIndex {
     table: Vec<(String, u8)>
 }
 
@@ -32,13 +32,27 @@ impl MyInterruptIndex {
         }
         None
     }
+
+    pub fn get_pic_mask(&self, pic: u8) -> u8 {
+        let mut res = 0;
+        let mut line: u8;
+        for pair in &self.table {
+            if (pic == 1) & (PIC_1_OFFSET <= pair.1) & (pair.1 < PIC_1_OFFSET + 8) {
+                line = pair.1 - PIC_1_OFFSET;
+            } else if (pic == 2) & (PIC_2_OFFSET <= pair.1) & (pair.1 < PIC_2_OFFSET + 8) {
+                line = pair.1 - PIC_2_OFFSET;
+            } else { panic!() }
+            res = res | (1 << line);
+        };
+        res
+    }
 }
 
 pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 lazy_static! {
-    static ref INDEX: Mutex<MyInterruptIndex> = Mutex::new({
+    pub static ref INDEX: Mutex<MyInterruptIndex> = Mutex::new({
         let mut index = MyInterruptIndex::new();
         index.insert("Timer", PIC_1_OFFSET);
         index.insert("Keyboard", PIC_1_OFFSET + 1);
