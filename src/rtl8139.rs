@@ -213,10 +213,13 @@ fn set_transmit_status(size: u32) {
 
 pub fn receive_packets() {
     let header: u16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 1] as u16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize] as u16)};
+    
     println!("header: {:x}", header);
+    
     if (header & ROK) != 0 {
         let length: i16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 3] as i16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize + 2] as i16)};
         println!("PACKET LENGTH: {:?} (including 4 CRC)", length);
+        
         let payload: Vec<u8> = Vec::from(unsafe {&RECEIVE_BUFFER[RECEIVE_INDEX as usize + 4..RECEIVE_INDEX as usize + (length as usize)]});
         println!("PACKET PAYLOAD: {:x?}", payload);
         
