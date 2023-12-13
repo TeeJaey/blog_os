@@ -5,6 +5,8 @@ use alloc::vec::Vec;
 use x86_64::VirtAddr;
 use core::mem::size_of_val;
 
+/// Ethernet header, consisting of destination mac address,
+/// source mac address and protocol/ethertype
 #[derive(Debug)]
 #[repr(C)]
 pub struct EthernetHeader {
@@ -23,6 +25,7 @@ impl EthernetHeader {
     }
 }
 
+// Complete data-link-layer ethernet frame
 #[derive(Debug)]
 #[repr(C)]
 pub struct EthernetFrame {
@@ -37,6 +40,7 @@ impl EthernetFrame {
         Self {header, payload}
     }
 
+    // returns the whole frame in bytes
     fn to_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
         result.extend_from_slice(&self.header.dst_mac);
@@ -51,6 +55,8 @@ impl EthernetFrame {
     }
 }
 
+/// creates a buffer from given EthernetFrame 
+/// and passes the buffer's address and packets length to the RTL8139
 fn send_frame(frame: EthernetFrame) {
     let mut buffer: Vec<u8> = Vec::with_capacity(size_of_val(&frame));
     buffer.append(&mut frame.to_bytes());
@@ -60,6 +66,7 @@ fn send_frame(frame: EthernetFrame) {
     rtl8139::send_packet(buffer_virt_addr, buffer.len() as u32)
 }
 
+/// creates basic ethernet frame with empty data to be sent by the RTL8139
 pub fn send_empty_frame() {
     let header = EthernetHeader::new(
         [0xff; 6],

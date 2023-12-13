@@ -256,18 +256,22 @@ impl PciLocation {
         Self::write_data_port(data);
     }
 
+    /// Write 32-bit data to the PCI Config Data Register of the PCI device.
     fn write_data_port(value: u32) {
         unsafe {
             PCI_CONFIG_DATA_PORT.lock().write(value);
         }
     }
 
+    /// Read 32-bit data from the PCI Config Data Register of the PCI device.
     fn read_data_port() -> u32 {
         unsafe {
             PCI_CONFIG_DATA_PORT.lock().read()
         }
     }
 
+    /// Write 16-bit data to the PCI Command Register of the PCI device.
+    /// Prints states of the Register before and after writing to it.
     pub fn pci_set_command_register_bit(&self, data: u16) {
         unsafe { 
             PCI_CONFIG_ADDRESS_PORT.lock().write(self.pci_address(PCI_COMMAND));

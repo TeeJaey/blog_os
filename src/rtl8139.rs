@@ -85,11 +85,27 @@ const RTL8139_DEVICE_ID: u16 = 0x8139;
 const BUFFER_SIZE: u32 = 8 * 1024 + 16 + 1500;
 const TRANSMIT_DESCRIPTOR_COUNT: u8 = 4;
 
+// The Receive Buffer the RTL8139 uses to write received packets into memory
 static mut RECEIVE_BUFFER: [u8; BUFFER_SIZE as usize] = [0; BUFFER_SIZE as usize];
+
+// The Transmit Descriptor points towards the currently active TSD-TSAD-pair
 static mut TRANSMIT_DESCRIPTOR: u8 = 0;
+
+// The I/O-Base-Address of the RTL8139, to be set by PciDevice::determine_iobase()
 static mut IO_BASE_ADDR: u16 = 0;
+
+// Current Index inside the Receive-Ringbuffer of the RTL8139
 static mut RECEIVE_INDEX: i16 = 0;
 
+/// Initializes the RTL8139 Network Card, if it exists, with:
+/// - Getting its I/O-Address
+/// - Registering its Interrupt Line for the IDT
+/// - PC Bus Mastering and I/O-Space-Access
+/// - Powerup
+/// - Software Reset
+/// - Interrupt Masking
+/// - Enabling of the Receiver and Transmitter
+/// - Configuring the Receive Buffer
 pub fn init() {
     println!("Beginning initialisation of RTL8139!");
 
@@ -133,6 +149,7 @@ pub fn init() {
     }
 }
 
+// Returns the MAC-Address of the RTL8139
 pub fn get_mac_address() -> [u8; 6] {
     return [
         io_read_8(ID0),
@@ -144,6 +161,8 @@ pub fn get_mac_address() -> [u8; 6] {
     ]
 }
 
+/// Handles the kind of interrupt that caused the RTL8139 to send an IRQ
+/// To be called by a handler function in interrupts.rs
 pub fn handle_interrupt() {
 	let status = io_read_16(INTERRUPT_STATUS);
 	io_write_16(INTERRUPT_STATUS, RECEIVE_OK | TRANSMIT_OK | RECEIVE_ERROR | TRANSMIT_ERROR);
@@ -167,6 +186,7 @@ pub fn handle_interrupt() {
 	}
 }
 
+// Takes the virtual memory address of a packet to be sent and its length 
 pub fn send_packet(buffer_virt_addr: VirtAddr, len: u32) {
     println!("sending packet");
     println!("buffer virt addr: {:?}", buffer_virt_addr);
@@ -195,6 +215,8 @@ pub fn send_packet(buffer_virt_addr: VirtAddr, len: u32) {
     }
 }
 
+/// Writes the address of the buffer that holds a packet to be sent
+/// in the currently active Transmit Address Register of the RTL8139
 fn set_transmit_buffer(buffer: u32) {
     unsafe{
         let offset = TRANSMIT_ADDRESS +(4 * TRANSMIT_DESCRIPTOR);
@@ -203,6 +225,8 @@ fn set_transmit_buffer(buffer: u32) {
     }
 }
 
+/// Writes the length of the packet to be sent
+/// in the currently active Transmit Status Register of the RTL8139
 fn set_transmit_status(size: u32) {
     unsafe{
         let offset = TRANSMIT_STATUS +(4 * TRANSMIT_DESCRIPTOR);
@@ -211,6 +235,8 @@ fn set_transmit_status(size: u32) {
     }
 }
 
+/// Prints the received packets the Receive Buffer holds
+/// and updates the Index inside the Ringbuffer
 pub fn receive_packets() {
     let header: u16 = unsafe {(RECEIVE_BUFFER[RECEIVE_INDEX as usize + 1] as u16) << 8 | (RECEIVE_BUFFER[RECEIVE_INDEX as usize] as u16)};
     
@@ -234,34 +260,40 @@ pub fn receive_packets() {
     }
 }
 
+// Returns 8-Bit data from the specified offset inside the IO-Space of the RTL8139
 fn io_read_8(offset: u8) -> u8 {
     let io_port: Mutex<Port<u8>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     let res = unsafe{io_port.lock().read()};
     res
 }
 
+// Returns 16-Bit data from the specified offset inside the IO-Space of the RTL8139
 fn io_read_16(offset: u8) -> u16 {
     let io_port: Mutex<Port<u16>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     let res = unsafe{io_port.lock().read()};
     res
 }
 
+// Returns 32-Bit data from the specified offset inside the IO-Space of the RTL8139
 fn io_read_32(offset: u8) -> u32 {
     let io_port: Mutex<Port<u32>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     let res = unsafe{io_port.lock().read()};
     res
 }
 
+// Writes 8-Bit data to the specified offset inside the IO-Space of the RTL8139
 fn io_write_8(offset: u8, value: u8) {
     let io_port: Mutex<Port<u8>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     unsafe{io_port.lock().write(value);}
 }
 
+// Writes 16-Bit data to the specified offset inside the IO-Space of the RTL8139
 fn io_write_16(offset: u8, value: u16) {
     let io_port: Mutex<Port<u16>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     unsafe{io_port.lock().write(value);}
 }
 
+// Writes 32-Bit data to the specified offset inside the IO-Space of the RTL8139
 fn io_write_32(offset: u8, value: u32) {
     let io_port: Mutex<Port<u32>> = Mutex::new(unsafe {Port::new(IO_BASE_ADDR + offset as u16)});
     unsafe{io_port.lock().write(value);}
